@@ -16,6 +16,8 @@ export interface Ts119602SyntaxValidation {
 export interface Ts119602MultilingualValue {
   language: unknown;
   value: unknown;
+  path?: string;
+  hasElementContent?: boolean;
 }
 
 export interface Ts119602MultilingualValidation extends Ts119602SyntaxValidation {

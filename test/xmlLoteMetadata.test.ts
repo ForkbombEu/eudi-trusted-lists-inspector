@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { assessArtifactContent } from "../src/audit.js";
 import { inspectTs119602Certificate } from "../src/standards/ts119602Identity.js";
+import { assessXmlLoteMetadata } from "../src/xml/loteMetadata.js";
 
 const schemeInformation = `
   <ListAndSchemeInformation>
@@ -196,6 +197,67 @@ describe("ETSI TS 119 602 XML LoTE metadata", () => {
     expect(result.ts119602.warnings).toContain(
       "xml_lote.structure.xml_binding: TrustedEntitiesList is accepted as a WE BUILD compatibility root, but it is not conformant with the ETSI TS 119 602 V1.1.1 scheme-explicit XML binding.",
     );
+  });
+
+  it("extracts IDunion diagnostics while validating the original unqualified root bytes", async () => {
+    const xml = await readFile("test/fixtures/ts119602-idunion-unqualified-root.xml", "utf8");
+    const result = await assessXmlLoteMetadata(xml, new Date("2026-11-12T00:00:00Z"), undefined, undefined, {
+      commandRunner: async (_command, args) => {
+        if (args[0] === "--version") return { code: 0, stdout: "xmllint", stderr: "" };
+        await expect(readFile(args.at(-2) as string, "utf8")).resolves.toBe(xml);
+        return { code: 1, stdout: "", stderr: "Element TrustedEntitiesList is not the expected root." };
+      },
+    });
+
+    expect(result.detected).toEqual({ format: "xml", artifactKind: "xml_lote" });
+    expect(result.ts119602.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "xml_lote.structure.xml_binding",
+        status: "fail",
+        severity: "critical",
+        evidence: expect.objectContaining({
+          binding: "unsupported",
+          observedRootLocalName: "TrustedEntitiesList",
+          observedRootNamespace: "",
+        }),
+      }),
+      expect.objectContaining({ id: "ts119602.binding.xml_schema", status: "fail", severity: "error" }),
+      expect.objectContaining({
+        id: "ts119602.service.name",
+        status: "fail",
+        severity: "error",
+        evidence: expect.objectContaining({
+          serviceCount: 5,
+          invalidServiceCount: 4,
+          blankNameCount: 3,
+          nestedNameCount: 2,
+          results: expect.arrayContaining([
+            expect.objectContaining({
+              entityPath: "/TrustedEntitiesList[1]/TrustedEntitiesList[1]/TrustedEntity[4]",
+              nestedNamePaths: ["/TrustedEntitiesList[1]/TrustedEntitiesList[1]/TrustedEntity[4]/TrustedEntityServices[1]/TrustedEntityService[1]/ServiceInformation[1]/ServiceName[1]/Name[1]"],
+            }),
+          ]),
+        }),
+      }),
+      expect.objectContaining({
+        id: "ts119602.entity.first_information_uri_sharing",
+        status: "warn",
+        severity: "warning",
+        evidence: expect.objectContaining({
+          sharedUriCount: 1,
+          affectedEntityCount: 2,
+          groups: [expect.objectContaining({
+            uri: "http://uri.etsi.org/19602/ListOfTrustedEntities/WalletProvider/NL",
+            entityCount: 2,
+            entities: [
+              expect.objectContaining({ path: "/TrustedEntitiesList[1]/TrustedEntitiesList[1]/TrustedEntity[1]", name: "Direct text entity" }),
+              expect.objectContaining({ path: "/TrustedEntitiesList[1]/TrustedEntitiesList[1]/TrustedEntity[2]", name: "Empty name entity" }),
+            ],
+          })],
+        }),
+      }),
+    ]));
+    expect(result.extracted).toMatchObject({ trustServiceProviderCount: 5, serviceCount: 5 });
   });
 
   it("does not treat foreign-namespace elements as the normative entity path", async () => {

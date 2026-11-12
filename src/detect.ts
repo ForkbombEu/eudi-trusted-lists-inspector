@@ -67,6 +67,7 @@ export function detectArtifact(bytes: Buffer | undefined, contentType?: string):
     ) {
       return { format: "xml", artifactKind: "xml_lote" };
     }
+    if (root && isUnqualifiedIdunionXmlLote(root)) return { format: "xml", artifactKind: "xml_lote" };
     if (root && localName === "TrustServiceStatusList") return { format: "xml", artifactKind: "xml_lotl_like" };
     return { format: "xml", artifactKind: "unknown" };
   }
@@ -104,11 +105,28 @@ function getJsonLoteType(value: object): string {
   return typeof information.LoTEType === "string" ? information.LoTEType : "";
 }
 
+function directElements(node: Node): Element[] {
+  return Array.from(node.childNodes).filter((child): child is Element => child.nodeType === 1);
+}
+
+function direct602Children(node: Node, localName: string): Element[] {
+  return directElements(node).filter((child) => (
+    (child.localName || child.nodeName) === localName && child.namespaceURI === ETSI_TS119602_NAMESPACE
+  ));
+}
+
+function isUnqualifiedIdunionXmlLote(root: unknown): boolean {
+  if (!root || typeof root !== "object" || !("childNodes" in root)) return false;
+  const element = root as Element;
+  if (element.nodeName !== "TrustedEntitiesList" || element.namespaceURI !== null) return false;
+  const scheme = direct602Children(element, "ListAndSchemeInformation");
+  const entities = direct602Children(element, "TrustedEntitiesList");
+  const types = scheme.length === 1 ? direct602Children(scheme[0], "LoTEType") : [];
+  return entities.length === 1 && types.length === 1 && Boolean(types[0].textContent?.trim());
+}
+
 function isXmlLotl(root: unknown): boolean {
   if (!root || typeof root !== "object" || !("childNodes" in root)) return false;
-  const directElements = (node: { childNodes: ArrayLike<unknown> }) => Array.from(node.childNodes).filter((child): child is Element => (
-    typeof child === "object" && child !== null && "nodeType" in child && child.nodeType === 1
-  ));
   const element = root as Element;
   const scheme = directElements(element).find((child) => (
     (child.localName || child.nodeName) === "SchemeInformation" && child.namespaceURI === element.namespaceURI

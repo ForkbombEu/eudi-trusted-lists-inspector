@@ -58,6 +58,26 @@ describe("detectArtifact", () => {
     });
   });
 
+  it("detects the unqualified IDunion compatibility root only from its direct namespaced structure", async () => {
+    const bytes = await readFile("test/fixtures/ts119602-idunion-unqualified-root.xml");
+    expect(detectArtifact(bytes, "application/xml")).toMatchObject({
+      format: "xml",
+      artifactKind: "xml_lote",
+    });
+  });
+
+  it("keeps unrelated and partially matching unqualified XML outside the compatibility path", () => {
+    const cases = [
+      "<TrustedEntitiesList xmlns:lote=\"http://uri.etsi.org/019602/v1#\" />",
+      "<TrustedEntitiesList xmlns:lote=\"http://uri.etsi.org/019602/v1#\"><lote:ListAndSchemeInformation><lote:LoTEType>urn:example:type</lote:LoTEType></lote:ListAndSchemeInformation></TrustedEntitiesList>",
+      "<TrustedEntitiesList xmlns:lote=\"http://uri.etsi.org/019602/v1#\"><lote:ListAndSchemeInformation><lote:LoTEType>urn:example:type</lote:LoTEType></lote:ListAndSchemeInformation><wrapper><lote:TrustedEntitiesList /></wrapper></TrustedEntitiesList>",
+      "<TrustedEntitiesList xmlns=\"https://example.test/other\" xmlns:lote=\"http://uri.etsi.org/019602/v1#\"><lote:ListAndSchemeInformation><lote:LoTEType>urn:example:type</lote:LoTEType></lote:ListAndSchemeInformation><lote:TrustedEntitiesList /></TrustedEntitiesList>",
+    ];
+    for (const xml of cases) {
+      expect(detectArtifact(Buffer.from(xml), "application/xml")).toMatchObject({ format: "xml", artifactKind: "unknown" });
+    }
+  });
+
   it("detects JSON LoTE", async () => {
     const bytes = await readFile("test/fixtures/json-lote.json");
     expect(detectArtifact(bytes, "application/json")).toMatchObject({

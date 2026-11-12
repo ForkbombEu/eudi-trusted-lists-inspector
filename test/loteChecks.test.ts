@@ -281,6 +281,69 @@ describe("assessJsonLote", () => {
     ]));
   });
 
+  it("applies first-URI sharing consistently to JSON without changing the conformance verdict", async () => {
+    const parsed = await fixture("json-lote.json") as { LoTE: { TrustedEntitiesList: Array<Record<string, unknown>> } };
+    const baseline = assessJsonLote(structuredClone(parsed), true, new Date("2026-07-21T00:00:00Z"));
+    expect(baseline.ts119602.checks).toContainEqual(expect.objectContaining({
+      id: "ts119602.entity.first_information_uri_sharing",
+      status: "pass",
+    }));
+
+    const second = structuredClone(parsed.LoTE.TrustedEntitiesList[0]);
+    const secondInformation = second.TrustedEntityInformation as Record<string, unknown>;
+    secondInformation.TEName = [{ lang: "en", value: "Second Provider" }];
+    parsed.LoTE.TrustedEntitiesList.push(second);
+    const shared = assessJsonLote(parsed, true, new Date("2026-07-21T00:00:00Z"));
+    expect(shared.ts119602.checks).toContainEqual(expect.objectContaining({
+      id: "ts119602.entity.first_information_uri_sharing",
+      status: "warn",
+      severity: "warning",
+      evidence: expect.objectContaining({
+        sharedUriCount: 1,
+        affectedEntityCount: 2,
+        groups: [expect.objectContaining({
+          uri: "https://provider.example.test/info",
+          entityCount: 2,
+          entities: [
+            expect.objectContaining({ path: "/LoTE/TrustedEntitiesList/0", name: "Example Provider", firstInformationUriPath: "/LoTE/TrustedEntitiesList/0/TrustedEntityInformation/TEInformationURI/0" }),
+            expect.objectContaining({ path: "/LoTE/TrustedEntitiesList/1", name: "Second Provider", firstInformationUriPath: "/LoTE/TrustedEntitiesList/1/TrustedEntityInformation/TEInformationURI/0" }),
+          ],
+        })],
+      }),
+    }));
+    expect(shared.ts119602.conformanceLevel).toBe(baseline.ts119602.conformanceLevel);
+    expect(shared.ts119602.mandatoryFailures.some((entry) => entry.startsWith("ts119602.entity.first_information_uri_sharing:"))).toBe(false);
+
+    secondInformation.TEInformationURI = [
+      { lang: "en", uriValue: "https://provider.example.test/distinct" },
+      { lang: "en", uriValue: "https://provider.example.test/info" },
+    ];
+    const laterOnly = assessJsonLote(parsed, true, new Date("2026-07-21T00:00:00Z"));
+    expect(laterOnly.ts119602.checks).toContainEqual(expect.objectContaining({
+      id: "ts119602.entity.first_information_uri_sharing",
+      status: "pass",
+      evidence: expect.objectContaining({ sharedUriCount: 0 }),
+    }));
+  });
+
+  it("rejects whitespace-only JSON service names with their element path", async () => {
+    const parsed = await fixture("json-lote.json") as { LoTE: { TrustedEntitiesList: Array<Record<string, unknown>> } };
+    const service = (parsed.LoTE.TrustedEntitiesList[0].TrustedEntityServices as Array<Record<string, unknown>>)[0];
+    (service.ServiceInformation as Record<string, unknown>).ServiceName = [{ lang: "en", value: "   " }];
+    const result = assessJsonLote(parsed, true, new Date("2026-07-21T00:00:00Z"));
+    expect(result.ts119602.checks).toContainEqual(expect.objectContaining({
+      id: "ts119602.service.name",
+      status: "fail",
+      evidence: expect.objectContaining({
+        blankNameCount: 1,
+        nestedNameCount: 0,
+        results: [expect.objectContaining({
+          blankNamePaths: ["/LoTE/TrustedEntitiesList/0/TrustedEntityServices/0/ServiceInformation/ServiceName/0"],
+        })],
+      }),
+    }));
+  });
+
   it("runs local TS 119 602 checks even when the legacy opt-in flag is false", async () => {
     const result = assessJsonLote(await fixture("json-lote.json"), false);
     expect(result.ts119602.checks).toEqual(expect.arrayContaining([

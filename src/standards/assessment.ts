@@ -3,6 +3,7 @@ import type { CheckResult, StandardAssessment } from "../types.js";
 export interface AssessmentOptions {
   applicable?: boolean;
   coverageComplete?: boolean;
+  nonConformanceWarningIds?: readonly string[];
 }
 
 /** Build a standard-specific verdict from only that standard's findings. */
@@ -33,7 +34,7 @@ export function buildStandardAssessment(
         ? "inconclusive"
         : !options.coverageComplete || checks.some((entry) => entry.status === "not_checked")
           ? "not_checked"
-          : checks.some((entry) => entry.status === "warn")
+          : checks.some((entry) => entry.status === "warn" && !options.nonConformanceWarningIds?.includes(entry.id))
             ? "partially_conformant"
             : "conformant";
 

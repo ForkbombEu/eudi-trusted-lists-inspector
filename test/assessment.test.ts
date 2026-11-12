@@ -22,6 +22,17 @@ describe("buildStandardAssessment", () => {
     const assessment = buildStandardAssessment([finding("pass")], { coverageComplete: true });
     expect(assessment.conformanceLevel).toBe("conformant");
   });
+
+  it("keeps exempt interoperability warnings out of the normative verdict only", () => {
+    const warning = { ...finding("warn"), id: "ts119602.entity.first_information_uri_sharing" };
+    const assessment = buildStandardAssessment([finding("pass"), warning], {
+      coverageComplete: true,
+      nonConformanceWarningIds: ["ts119602.entity.first_information_uri_sharing"],
+    });
+    expect(assessment.conformanceLevel).toBe("conformant");
+    expect(assessment.warnings).toEqual([`${warning.id}: ${warning.message}`]);
+    expect(buildStandardAssessment([finding("pass"), warning], { coverageComplete: true }).conformanceLevel).toBe("partially_conformant");
+  });
 });
 
 function finding(status: CheckResult["status"]): CheckResult {

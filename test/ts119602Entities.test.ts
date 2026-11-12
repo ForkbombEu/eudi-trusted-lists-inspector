@@ -25,6 +25,8 @@ describe("ETSI TS 119 602 clauses 6.4-6.7", () => {
     expect(find(result, "ts119602.entity.information")).toMatchObject({ status: "pass" });
     expect(find(result, "ts119602.entity.address")).toMatchObject({ status: "pass" });
     expect(find(result, "ts119602.service.information")).toMatchObject({ status: "pass" });
+    expect(find(result, "ts119602.service.name")).toMatchObject({ status: "pass", severity: "info" });
+    expect(find(result, "ts119602.entity.first_information_uri_sharing")).toMatchObject({ status: "pass", severity: "info" });
     expect(find(result, "ts119602.service.digital_identity")).toMatchObject({ status: "pass" });
   });
 
@@ -116,6 +118,97 @@ describe("ETSI TS 119 602 clauses 6.4-6.7", () => {
     const result = buildTs119602EntityFindings(input);
     expect(find(result, "ts119602.entity.information")).toMatchObject({ status: "fail", severity: "critical" });
     expect(find(result, "ts119602.entities.structure")).toMatchObject({ status: "fail", severity: "critical" });
+  });
+
+  it("keeps blank and nested service-name defects separate with element-level paths", () => {
+    const input = validInput();
+    const original = input.entities[0];
+    const names = [
+      { value: "Direct text", hasElementContent: false },
+      { value: "", hasElementContent: false },
+      { value: "   ", hasElementContent: false },
+      { value: "Nested text", hasElementContent: true },
+      { value: "", hasElementContent: true },
+    ];
+    input.entities = names.map((name, index) => {
+      const entity = structuredClone(original);
+      entity.path = `/entity/${index + 1}`;
+      entity.services[0].path = `/entity/${index + 1}/service/1`;
+      entity.services[0].name = [{ language: "en", ...name, path: `/entity/${index + 1}/service/1/name/1` }];
+      return entity;
+    });
+    const result = find(buildTs119602EntityFindings(input), "ts119602.service.name");
+    expect(result).toMatchObject({
+      status: "fail",
+      severity: "error",
+      message: "ServiceName validation failed for 4 of 5 services: 3 blank and 2 nested name elements.",
+      evidence: {
+        serviceCount: 5,
+        invalidServiceCount: 4,
+        blankNameCount: 3,
+        nestedNameCount: 2,
+        results: expect.arrayContaining([
+          expect.objectContaining({
+            entityPath: "/entity/4",
+            servicePath: "/entity/4/service/1",
+            blankNamePaths: [],
+            nestedNamePaths: ["/entity/4/service/1/name/1"],
+            names: [expect.objectContaining({ path: "/entity/4/service/1/name/1", blank: false, nested: true })],
+          }),
+          expect.objectContaining({
+            entityPath: "/entity/5",
+            blankNamePaths: ["/entity/5/service/1/name/1"],
+            nestedNamePaths: ["/entity/5/service/1/name/1"],
+          }),
+        ]),
+      },
+    });
+  });
+
+  it("rejects blank and nested names even when an observation has no element path", () => {
+    const input = validInput();
+    input.entities[0].services[0].name = [{ language: "en", value: "  ", hasElementContent: true }];
+    expect(find(buildTs119602EntityFindings(input), "ts119602.service.name")).toMatchObject({
+      status: "fail",
+      evidence: { blankNameCount: 1, nestedNameCount: 1 },
+    });
+  });
+
+  it("warns only for exact first information URIs shared by distinct entities", () => {
+    const input = validInput();
+    const second = structuredClone(input.entities[0]);
+    second.path = "/entity/2";
+    second.name = [{ language: "en", value: "Second Entity" }];
+    input.entities[0].informationUris = [{ language: "en", value: "https://example.test/shared", path: "/entity/1/uri/0" }];
+    second.informationUris = [{ language: "en", value: "https://example.test/shared", path: "/entity/2/uri/0" }];
+    input.entities.push(second);
+    const shared = find(buildTs119602EntityFindings(input), "ts119602.entity.first_information_uri_sharing");
+    expect(shared).toMatchObject({
+      status: "warn",
+      severity: "warning",
+      evidence: {
+        sharedUriCount: 1,
+        affectedEntityCount: 2,
+        groups: [{
+          uri: "https://example.test/shared",
+          entityCount: 2,
+          entities: [
+            { path: "/entity/1", name: "Example Entity", firstInformationUriPath: "/entity/1/uri/0" },
+            { path: "/entity/2", name: "Second Entity", firstInformationUriPath: "/entity/2/uri/0" },
+          ],
+        }],
+      },
+    });
+
+    input.entities[1].informationUris = [
+      { language: "en", value: "https://example.test/distinct", path: "/entity/2/uri/0" },
+      { language: "en", value: "https://example.test/shared", path: "/entity/2/uri/1" },
+    ];
+    input.entities[0].informationUris.push({ language: "en", value: "https://example.test/shared", path: "/entity/1/uri/1" });
+    expect(find(buildTs119602EntityFindings(input), "ts119602.entity.first_information_uri_sharing")).toMatchObject({
+      status: "pass",
+      evidence: { sharedUriCount: 0, affectedEntityCount: 0, groups: [] },
+    });
   });
 
   it("validates TE information pointers and every address URI as multilingual values", () => {

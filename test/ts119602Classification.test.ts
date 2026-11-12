@@ -54,6 +54,40 @@ describe("TS 119 602 artifact classification", () => {
     });
   });
 
+  it("classifies the IDunion structure while preserving its unsupported root evidence", async () => {
+    const bytes = await readFile("test/fixtures/ts119602-idunion-unqualified-root.xml");
+    const result = classifyTs119602Artifact({ bytes, detection: detectArtifact(bytes, "application/xml") });
+    expect(result).toMatchObject({
+      dataModel: "ts119602",
+      binding: "unknown",
+      bindingStatus: "unsupported",
+      profile: "wallet_providers",
+      profileStatus: "selected",
+      applicability: "applicable",
+      evidence: {
+        rootLocalName: "TrustedEntitiesList",
+        rootNamespace: "",
+        embeddedType: WALLET,
+      },
+    });
+  });
+
+  it("does not route unrelated XML from a declared pointer type alone", () => {
+    const bytes = Buffer.from("<TrustedEntitiesList xmlns:lote=\"http://uri.etsi.org/019602/v1#\" />");
+    const result = classifyTs119602Artifact({
+      bytes,
+      detection: detectArtifact(bytes, "application/xml"),
+      declaredType: WALLET,
+    });
+    expect(result).toMatchObject({
+      dataModel: "unknown",
+      binding: "unknown",
+      applicability: "unknown",
+      evidence: { declaredType: WALLET },
+    });
+    expect(detectArtifact(bytes, "application/xml").artifactKind).toBe("unknown");
+  });
+
   it("does not select a profile from a foreign-namespace XML element", () => {
     const bytes = Buffer.from(`<ListOfTrustedEntities xmlns="http://uri.etsi.org/019602/v1#"><ListAndSchemeInformation><LoTEType xmlns="">${PUB_EAA}</LoTEType></ListAndSchemeInformation></ListOfTrustedEntities>`);
     const result = classifyTs119602Artifact({ bytes, detection: detectArtifact(bytes, "application/xml") });

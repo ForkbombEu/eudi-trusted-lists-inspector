@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TrustedEntitiesList xmlns:lote="http://uri.etsi.org/019602/v1#">
+  <lote:ListAndSchemeInformation>
+    <lote:LoTEVersionIdentifier>1</lote:LoTEVersionIdentifier>
+    <lote:LoTESequenceNumber>1</lote:LoTESequenceNumber>
+    <lote:LoTEType>http://uri.etsi.org/19602/LoTEType/EUWalletProvidersList</lote:LoTEType>
+    <lote:SchemeOperatorName><lote:Name xml:lang="en">IDunion test operator</lote:Name></lote:SchemeOperatorName>
+    <lote:SchemeOperatorAddress>
+      <lote:PostalAddresses><lote:PostalAddress xml:lang="en"><lote:StreetAddress>1 Example Street</lote:StreetAddress><lote:CountryName>EU</lote:CountryName></lote:PostalAddress></lote:PostalAddresses>
+      <lote:ElectronicAddress><lote:URI xml:lang="en">mailto:audit@example.test</lote:URI><lote:URI xml:lang="en">https://example.test/contact</lote:URI></lote:ElectronicAddress>
+    </lote:SchemeOperatorAddress>
+    <lote:SchemeName><lote:Name xml:lang="en">IDunion compatibility fixture</lote:Name></lote:SchemeName>
+    <lote:SchemeInformationURI><lote:URI xml:lang="en">https://example.test/info</lote:URI></lote:SchemeInformationURI>
+    <lote:SchemeTerritory>EU</lote:SchemeTerritory>
+    <lote:StatusDeterminationApproach>http://example.test/status</lote:StatusDeterminationApproach>
+    <lote:SchemeTypeCommunityRules><lote:URI xml:lang="en">https://example.test/scheme-rules</lote:URI></lote:SchemeTypeCommunityRules>
+    <lote:PolicyOrLegalNotice><lote:LoTEPolicy xml:lang="en">https://example.test/policy</lote:LoTEPolicy></lote:PolicyOrLegalNotice>
+    <lote:ListIssueDateTime>2026-07-09T11:30:03Z</lote:ListIssueDateTime>
+    <lote:NextUpdate><lote:dateTime>2027-01-09T11:30:03Z</lote:dateTime></lote:NextUpdate>
+  </lote:ListAndSchemeInformation>
+  <lote:TrustedEntitiesList>
+    <lote:TrustedEntity>
+      <lote:TrustedEntityInformation>
+        <lote:TEName><lote:Name xml:lang="en">Direct text entity</lote:Name></lote:TEName>
+        <lote:TEAddress><lote:PostalAddresses><lote:PostalAddress xml:lang="en"><lote:StreetAddress>2 Provider Street</lote:StreetAddress><lote:CountryName>EU</lote:CountryName></lote:PostalAddress></lote:PostalAddresses><lote:ElectronicAddress><lote:URI xml:lang="en">mailto:one@example.test</lote:URI><lote:URI xml:lang="en">https://one.example.test</lote:URI></lote:ElectronicAddress></lote:TEAddress>
+        <lote:TEInformationURI><lote:URI xml:lang="en">http://uri.etsi.org/19602/ListOfTrustedEntities/WalletProvider/NL</lote:URI></lote:TEInformationURI>
+      </lote:TrustedEntityInformation>
+      <lote:TrustedEntityServices><lote:TrustedEntityService><lote:ServiceInformation><lote:ServiceName><lote:Name xml:lang="en">Direct text service</lote:Name></lote:ServiceName><lote:ServiceDigitalIdentity><lote:DigitalId><lote:OtherId>urn:example:direct</lote:OtherId></lote:DigitalId></lote:ServiceDigitalIdentity></lote:ServiceInformation></lote:TrustedEntityService></lote:TrustedEntityServices>
+    </lote:TrustedEntity>
+    <lote:TrustedEntity>
+      <lote:TrustedEntityInformation>
+        <lote:TEName><lote:Name xml:lang="en">Empty name entity</lote:Name></lote:TEName>
+        <lote:TEAddress><lote:PostalAddresses><lote:PostalAddress xml:lang="en"><lote:StreetAddress>2 Provider Street</lote:StreetAddress><lote:CountryName>EU</lote:CountryName></lote:PostalAddress></lote:PostalAddresses><lote:ElectronicAddress><lote:URI xml:lang="en">mailto:two@example.test</lote:URI><lote:URI xml:lang="en">https://two.example.test</lote:URI></lote:ElectronicAddress></lote:TEAddress>
+        <lote:TEInformationURI><lote:URI xml:lang="en">http://uri.etsi.org/19602/ListOfTrustedEntities/WalletProvider/NL</lote:URI></lote:TEInformationURI>
+      </lote:TrustedEntityInformation>
+      <lote:TrustedEntityServices><lote:TrustedEntityService><lote:ServiceInformation><lote:ServiceName><lote:Name xml:lang="en"/></lote:ServiceName><lote:ServiceDigitalIdentity><lote:DigitalId><lote:OtherId>urn:example:empty</lote:OtherId></lote:DigitalId></lote:ServiceDigitalIdentity></lote:ServiceInformation></lote:TrustedEntityService></lote:TrustedEntityServices>
+    </lote:TrustedEntity>
+    <lote:TrustedEntity>
+      <lote:TrustedEntityInformation>
+        <lote:TEName><lote:Name xml:lang="en">Whitespace name entity</lote:Name></lote:TEName>
+        <lote:TEAddress><lote:PostalAddresses><lote:PostalAddress xml:lang="en"><lote:StreetAddress>2 Provider Street</lote:StreetAddress><lote:CountryName>EU</lote:CountryName></lote:PostalAddress></lote:PostalAddresses><lote:ElectronicAddress><lote:URI xml:lang="en">mailto:three@example.test</lote:URI><lote:URI xml:lang="en">https://three.example.test</lote:URI></lote:ElectronicAddress></lote:TEAddress>
+        <lote:TEInformationURI><lote:URI xml:lang="en">https://example.test/entities/three</lote:URI></lote:TEInformationURI>
+      </lote:TrustedEntityInformation>
+      <lote:TrustedEntityServices><lote:TrustedEntityService><lote:ServiceInformation><lote:ServiceName><lote:Name xml:lang="en">   </lote:Name></lote:ServiceName><lote:ServiceDigitalIdentity><lote:DigitalId><lote:OtherId>urn:example:whitespace</lote:OtherId></lote:DigitalId></lote:ServiceDigitalIdentity></lote:ServiceInformation></lote:TrustedEntityService></lote:TrustedEntityServices>
+    </lote:TrustedEntity>
+    <lote:TrustedEntity>
+      <lote:TrustedEntityInformation>
+        <lote:TEName><lote:Name xml:lang="en">Nested text entity</lote:Name></lote:TEName>
+        <lote:TEAddress><lote:PostalAddresses><lote:PostalAddress xml:lang="en"><lote:StreetAddress>2 Provider Street</lote:StreetAddress><lote:CountryName>EU</lote:CountryName></lote:PostalAddress></lote:PostalAddresses><lote:ElectronicAddress><lote:URI xml:lang="en">mailto:four@example.test</lote:URI><lote:URI xml:lang="en">https://four.example.test</lote:URI></lote:ElectronicAddress></lote:TEAddress>
+        <lote:TEInformationURI><lote:URI xml:lang="en">https://example.test/entities/four</lote:URI></lote:TEInformationURI>
+      </lote:TrustedEntityInformation>
+      <lote:TrustedEntityServices><lote:TrustedEntityService><lote:ServiceInformation><lote:ServiceName><lote:Name xml:lang="en"><lote:NonEmptyNormalizedString>Nested service</lote:NonEmptyNormalizedString></lote:Name></lote:ServiceName><lote:ServiceDigitalIdentity><lote:DigitalId><lote:OtherId>urn:example:nested-text</lote:OtherId></lote:DigitalId></lote:ServiceDigitalIdentity></lote:ServiceInformation></lote:TrustedEntityService></lote:TrustedEntityServices>
+    </lote:TrustedEntity>
+    <lote:TrustedEntity>
+      <lote:TrustedEntityInformation>
+        <lote:TEName><lote:Name xml:lang="en">Nested empty entity</lote:Name></lote:TEName>
+        <lote:TEAddress><lote:PostalAddresses><lote:PostalAddress xml:lang="en"><lote:StreetAddress>2 Provider Street</lote:StreetAddress><lote:CountryName>EU</lote:CountryName></lote:PostalAddress></lote:PostalAddresses><lote:ElectronicAddress><lote:URI xml:lang="en">mailto:five@example.test</lote:URI><lote:URI xml:lang="en">https://five.example.test</lote:URI></lote:ElectronicAddress></lote:TEAddress>
+        <lote:TEInformationURI><lote:URI xml:lang="en">https://example.test/entities/five</lote:URI></lote:TEInformationURI>
+      </lote:TrustedEntityInformation>
+      <lote:TrustedEntityServices><lote:TrustedEntityService><lote:ServiceInformation><lote:ServiceName><lote:Name xml:lang="en"><lote:NonEmptyNormalizedString/></lote:Name></lote:ServiceName><lote:ServiceDigitalIdentity><lote:DigitalId><lote:OtherId>urn:example:nested-empty</lote:OtherId></lote:DigitalId></lote:ServiceDigitalIdentity></lote:ServiceInformation></lote:TrustedEntityService></lote:TrustedEntityServices>
+    </lote:TrustedEntity>
+  </lote:TrustedEntitiesList>
+</TrustedEntitiesList>

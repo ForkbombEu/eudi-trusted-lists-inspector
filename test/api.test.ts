@@ -3,6 +3,7 @@ import { describe, expect, it, afterEach, vi } from "vitest";
 import YAML from "yaml";
 import { buildServer } from "../src/api/server.js";
 import { parseCompactJades } from "../src/json/jades.js";
+import type { AuditReport, TrustedListAuditResult } from "../src/types.js";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -148,6 +149,57 @@ describe("API server", () => {
     });
     expect(rendered.statusCode).toBe(200);
     expect(rendered.json().markdown).toBe(body.markdown);
+    await app.close();
+  });
+
+  it("returns both IDunion findings through JSON LoTL, XML LoTL, and single-artifact assessments", async () => {
+    const app = await buildServer();
+    const child = await readFile("test/fixtures/ts119602-idunion-unqualified-root.xml", "utf8");
+    const childUrl = "https://example.test/idunion-child.xml";
+    const walletType = "http://uri.etsi.org/19602/LoTEType/EUWalletProvidersList";
+    globalThis.fetch = vi.fn(async () => new Response(child, {
+      status: 200,
+      headers: { "content-type": "application/xml" },
+    })) as typeof fetch;
+
+    const lotl = JSON.parse(await readFile("test/fixtures/lotl.json", "utf8"));
+    lotl.LoTE.ListAndSchemeInformation.PointersToOtherLoTE = [{
+      LoTELocation: childUrl,
+      LoTEQualifiers: [{ LoTEType: walletType, MimeType: "application/xml" }],
+    }];
+    const jsonResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/audit/json",
+      payload: { lotl, options: { fetch: true, strict: false } },
+    });
+    expect(jsonResponse.statusCode).toBe(200);
+    expect(jsonResponse.json().report.results).toHaveLength(1);
+    expectIdunionFindings(jsonResponse.json().report.results[0]);
+    const script = await app.inject({ method: "GET", url: "/assets/audit-ui.js" });
+    const groups = await renderLotlFindingGroups(script.body, jsonResponse.json().report);
+    const childGroup = groups.find((group) => group.includes(`Fetched TrustedList: ${childUrl}`));
+    expect(childGroup).toContain("ts119602.service.name");
+    expect(childGroup).toContain("ts119602.entity.first_information_uri_sharing");
+
+    const xmlLotl = (await readFile("test/fixtures/lotl-ts119612.xml", "utf8"))
+      .replace("https://example.test/member-state.xml", childUrl)
+      .replace("http://uri.etsi.org/TrstSvc/TrustedList/TSLType/EUgeneric", walletType);
+    const xmlResponse = await app.inject({
+      method: "POST",
+      url: "/api/audit/lotl",
+      payload: { content: xmlLotl, options: { fetch: true, strict: false } },
+    });
+    expect(xmlResponse.statusCode).toBe(200);
+    expect(xmlResponse.json().report.results).toHaveLength(1);
+    expectIdunionFindings(xmlResponse.json().report.results[0]);
+
+    const artifactResponse = await app.inject({
+      method: "POST",
+      url: "/api/audit/artifact",
+      payload: { content: child, source: childUrl, contentType: "application/xml", options: { strict: false } },
+    });
+    expect(artifactResponse.statusCode).toBe(200);
+    expectIdunionFindings(artifactResponse.json().result);
     await app.close();
   });
 
@@ -881,6 +933,7 @@ describe("API server", () => {
     expect(script.body).toContain("FCAF trusted authorities");
     expect(script.body).toContain("Negative fixture descriptors");
     expect(script.body).toContain("Fetched TrustedList:");
+    expect(script.body).toContain("artifact.ts119602?.checks");
     expect(css.body).toContain(".result-group");
     expect(css.body).not.toMatch(/\.result-panel\s*\{\s*max-height:/);
     expect(css.body).toMatch(
@@ -894,3 +947,82 @@ describe("API server", () => {
     await app.close();
   });
 });
+
+function expectIdunionFindings(result: TrustedListAuditResult): void {
+  expect(result.detected).toMatchObject({ format: "xml", artifactKind: "xml_lote" });
+  expect(result.ts119602Classification).toMatchObject({ binding: "unknown", bindingStatus: "unsupported" });
+  expect(result.ts119602.checks).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: "ts119602.binding.supported", status: "fail" }),
+    expect.objectContaining({ id: "xml_lote.structure.xml_binding", status: "fail" }),
+    expect.objectContaining({
+      id: "ts119602.service.name",
+      status: "fail",
+      severity: "error",
+      evidence: expect.objectContaining({ serviceCount: 5, invalidServiceCount: 4, blankNameCount: 3, nestedNameCount: 2 }),
+    }),
+    expect.objectContaining({
+      id: "ts119602.entity.first_information_uri_sharing",
+      status: "warn",
+      severity: "warning",
+      evidence: expect.objectContaining({ sharedUriCount: 1, affectedEntityCount: 2 }),
+    }),
+  ]));
+}
+
+class TestElement {
+  children: TestElement[] = [];
+  listeners = new Map<string, (event: { preventDefault(): void }) => void | Promise<void>>();
+  files: unknown[] = [];
+  value = "";
+  checked = false;
+  disabled = false;
+  hidden = false;
+  className = "";
+  textContent = "";
+
+  addEventListener(type: string, listener: (event: { preventDefault(): void }) => void | Promise<void>): void {
+    this.listeners.set(type, listener);
+  }
+
+  append(...children: TestElement[]): void {
+    this.children.push(...children);
+  }
+
+  replaceChildren(...children: TestElement[]): void {
+    this.children = children;
+  }
+
+  scrollIntoView(): void {}
+}
+
+async function renderLotlFindingGroups(script: string, report: AuditReport): Promise<string[]> {
+  const elements = new Map<string, TestElement>();
+  const element = (id: string): TestElement => {
+    const existing = elements.get(id) ?? new TestElement();
+    elements.set(id, existing);
+    return existing;
+  };
+  const document = {
+    getElementById: element,
+    querySelectorAll: () => [],
+    createElement: () => new TestElement(),
+  };
+  element("lotl-url").value = "https://example.test/lotl.json";
+  element("timeout-ms").value = "1000";
+  element("json-checks").checked = true;
+  element("fetch-pointers").checked = true;
+  element("concurrency").value = "4";
+  const request = async () => new Response(JSON.stringify({ report, markdown: "" }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+  new Function("document", "fetch", "navigator", script)(document, request, {});
+  await element("audit-form").listeners.get("submit")?.({ preventDefault: () => {} });
+  return element("findings-result").children
+    .filter((group) => group.className === "result-group")
+    .map(elementText);
+}
+
+function elementText(element: TestElement): string {
+  return [element.textContent, ...element.children.map(elementText)].join(" ");
+}

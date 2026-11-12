@@ -91,6 +91,8 @@ export interface Ts119602EntitiesInput {
   assessmentDate: Date;
 }
 
+export const TS119602_INTEROPERABILITY_WARNING_IDS = ["ts119602.entity.first_information_uri_sharing"] as const;
+
 export const TS119602_ENTITY_EXTENSION_REGISTRY = Object.freeze({
   registryVersion: "2026-07-21",
   recognizedIdentifiers: ["OtherAssociatedBodies", "{http://uri.etsi.org/019602/v1/TrustedEntityExtensions}OtherAssociatedBodies"] as const,
@@ -122,10 +124,11 @@ export function buildTs119602EntityFindings(input: Ts119602EntitiesInput): {
       entityNamesFinding(input),
       entityAddressFinding(input),
       entityInformationUriFinding(input),
+      firstInformationUriSharingFinding(input),
       extensionFinding("ts119602.entity.extensions", input.entities.flatMap((entity) => entity.extensions), input.entities.some((entity) => entity.extensionsPresent), TS119602_ENTITY_EXTENSION_REGISTRY),
       serviceInformationFinding(services),
       optionalUriFinding("ts119602.service.type", "ServiceTypeIdentifier", services.map((service) => service.typeIdentifier)),
-      serviceNamesFinding(services),
+      serviceNamesFinding(input.entities),
       identityFinding(identities, certificateEvidence),
       identityEquivalenceFinding(identities),
       serviceStatusFinding(services, input.historyPeriod),
@@ -199,10 +202,74 @@ function serviceInformationFinding(services: Ts119602ServiceObservation[]): Chec
   return aggregate("ts119602.service.information", results, "Every service contains exactly nested ServiceName and ServiceDigitalIdentity components.", "ServiceInformation must contain exactly one ServiceName and ServiceDigitalIdentity, with only the defined optional components.", "critical");
 }
 
-function serviceNamesFinding(services: Ts119602ServiceObservation[]): CheckResult {
-  if (services.length === 0) return finding("ts119602.service.name", "not_applicable", "info", "Service names are not applicable because no service was observed.");
-  const results = services.map((service) => ({ path: service.path, validation: validateTs119602MultilingualValues(service.name), valid: validateTs119602MultilingualValues(service.name).outcome === "valid" }));
-  return aggregate("ts119602.service.name", results, "Every service name is a locally valid multilingual value.", "ServiceName must be a non-empty multilingual value.");
+function firstInformationUriSharingFinding(input: Ts119602EntitiesInput): CheckResult {
+  if (input.entities.length === 0) return finding("ts119602.entity.first_information_uri_sharing", "not_applicable", "info", "First TEInformationURI sharing is not applicable because no entity was observed.");
+  const groupsByUri = new Map<string, Array<{ path: string; name?: string; firstInformationUriPath?: string }>>();
+  for (const entity of input.entities) {
+    const firstUri = entity.informationUris[0];
+    if (typeof firstUri?.value !== "string" || firstUri.value.trim().length === 0) continue;
+    const name = entity.name.find((entry) => entry.language === "en" && typeof entry.value === "string" && entry.value.trim().length > 0)
+      ?? entity.name.find((entry) => typeof entry.value === "string" && entry.value.trim().length > 0);
+    const group = groupsByUri.get(firstUri.value) ?? [];
+    group.push({
+      path: entity.path,
+      name: typeof name?.value === "string" ? name.value : undefined,
+      firstInformationUriPath: firstUri.path,
+    });
+    groupsByUri.set(firstUri.value, group);
+  }
+  const groups = [...groupsByUri.entries()]
+    .filter(([, entities]) => entities.length > 1)
+    .map(([uri, entities]) => ({ uri, entityCount: entities.length, entities }));
+  const affectedEntityCount = groups.reduce((count, group) => count + group.entityCount, 0);
+  const evidence = { sharedUriCount: groups.length, affectedEntityCount, groups };
+  if (groups.length === 0) return finding("ts119602.entity.first_information_uri_sharing", "pass", "info", "No non-empty first TEInformationURI value is shared by distinct entity entries.", evidence);
+  return finding(
+    "ts119602.entity.first_information_uri_sharing",
+    "warn",
+    "warning",
+    `${groups.length} shared first TEInformationURI value${groups.length === 1 ? "" : "s"} affect${groups.length === 1 ? "s" : ""} ${affectedEntityCount} entities. Consumers that key by the first URI may lose entries; shared country-role URIs are valid under the applicable profile.`,
+    evidence,
+  );
+}
+
+function serviceNamesFinding(entities: Ts119602EntityObservation[]): CheckResult {
+  const results = entities.flatMap((entity) => entity.services.map((service) => {
+    const baseValidation = validateTs119602MultilingualValues(service.name);
+    const blankNames = service.name.filter((entry) => typeof entry.value === "string" && entry.value.trim().length === 0);
+    const nestedNames = service.name.filter((entry) => entry.hasElementContent);
+    const blankNamePaths = blankNames.flatMap((entry) => entry.path ? [entry.path] : []);
+    const nestedNamePaths = nestedNames.flatMap((entry) => entry.path ? [entry.path] : []);
+    const diagnostics = [...baseValidation.diagnostics];
+    if (blankNames.length > 0) diagnostics.push({ code: "service_name.blank", message: "ServiceName entries must contain non-whitespace text." });
+    if (nestedNames.length > 0) diagnostics.push({ code: "service_name.nested_element", message: "ServiceName Name elements must contain direct text without nested elements." });
+    const validation = { ...baseValidation, diagnostics, outcome: diagnostics.length === 0 ? "valid" as const : "invalid" as const };
+    return {
+      path: service.path,
+      entityPath: entity.path,
+      servicePath: service.path,
+      validation,
+      names: service.name.map((entry) => ({
+        path: entry.path,
+        language: entry.language,
+        blank: typeof entry.value === "string" && entry.value.trim().length === 0,
+        nested: Boolean(entry.hasElementContent),
+      })),
+      blankNamePaths,
+      nestedNamePaths,
+      valid: validation.outcome === "valid",
+    };
+  }));
+  if (results.length === 0) return finding("ts119602.service.name", "not_applicable", "info", "Service names are not applicable because no service was observed.");
+  const invalidServiceCount = results.filter((entry) => !entry.valid).length;
+  const blankNameCount = results.reduce((count, entry) => count + entry.names.filter((name) => name.blank).length, 0);
+  const nestedNameCount = results.reduce((count, entry) => count + entry.names.filter((name) => name.nested).length, 0);
+  const evidence = { serviceCount: results.length, invalidServiceCount, blankNameCount, nestedNameCount, results };
+  if (invalidServiceCount === 0) return finding("ts119602.service.name", "pass", "info", "Every service name is a locally valid multilingual value.", evidence);
+  const message = blankNameCount > 0 || nestedNameCount > 0
+    ? `ServiceName validation failed for ${invalidServiceCount} of ${results.length} services: ${blankNameCount} blank and ${nestedNameCount} nested name element${nestedNameCount === 1 ? "" : "s"}.`
+    : "ServiceName must be a non-empty multilingual value.";
+  return finding("ts119602.service.name", "fail", "error", message, evidence);
 }
 
 function identityFinding(identities: Ts119602IdentityObservation[], certificateEvidence: Array<{ path: string; value: unknown; lexicalValid: boolean; summary?: CertificateSummary }>): CheckResult {
@@ -366,6 +433,7 @@ function citationForFinding(id: string): string {
   if (id === "ts119602.entity.names") return "ETSI TS 119 602 V1.1.1 clauses 6.5.1 and 6.5.2";
   if (id === "ts119602.entity.address") return "ETSI TS 119 602 V1.1.1 clause 6.5.3";
   if (id === "ts119602.entity.information_uri") return "ETSI TS 119 602 V1.1.1 clause 6.5.4";
+  if (id === "ts119602.entity.first_information_uri_sharing") return "ETSI TS 119 602 V1.1.1 clause 6.5.4 and applicable Annex D-I profiles; interoperability observation, not a uniqueness requirement";
   if (id === "ts119602.entity.extensions") return "ETSI TS 119 602 V1.1.1 clause 6.5.5";
   if (id === "ts119602.service.information") return "ETSI TS 119 602 V1.1.1 clause 6.6.0";
   if (id === "ts119602.service.type") return "ETSI TS 119 602 V1.1.1 clause 6.6.1";

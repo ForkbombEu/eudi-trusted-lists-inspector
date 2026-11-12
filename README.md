@@ -29,7 +29,7 @@ Provide a JSON or ETSI TS 119 612 XML LoTL URL, or upload a local XML or JSON fi
 
 ### TrustedList XML/JSON
 
-Provide a TrustedList URL, upload XML/JSON/JWS, or paste content. The UI renders findings, the complete JSON result, and available Markdown.
+Provide a TrustedList URL, upload XML/JSON/JWS, or paste content. The UI renders findings, the complete JSON result, and available Markdown. TS 119 602 findings identify blank or incorrectly nested service names and warn when distinct entities share their first information URI; the URI warning is an interoperability observation, not a schema or trust failure.
 
 For signed LoTL/LoTE inputs, the embedded `ds:KeyInfo` signing certificate is compared with every applicable `ServiceDigitalIdentity` certificate. The exact-certificate check passes when any candidate matches; certificate ordering does not affect the result.
 

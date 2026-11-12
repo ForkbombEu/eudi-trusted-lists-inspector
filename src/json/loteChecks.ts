@@ -4,6 +4,7 @@ import { buildStandardAssessment } from "../standards/assessment.js";
 import {
   buildTs119602EntityFindings,
   TS119602_ENTITY_EXTENSION_REGISTRY,
+  TS119602_INTEROPERABILITY_WARNING_IDS,
   TS119602_SERVICE_EXTENSION_REGISTRY,
   type Ts119602EntitiesInput,
   type Ts119602IdentityObservation,
@@ -118,7 +119,7 @@ export function assessJsonLote(
   );
 
   return {
-    ts119602: buildStandardAssessment(checks, { coverageComplete: false }),
+    ts119602: buildStandardAssessment(checks, { coverageComplete: false, nonConformanceWarningIds: TS119602_INTEROPERABILITY_WARNING_IDS }),
     extracted: {
       schemeOperatorName: stringValues(getPath(info, ["SchemeOperatorName"])),
       schemeName: stringValues(getPath(info, ["SchemeName"])),
@@ -185,7 +186,7 @@ function collectJsonEntitiesInput(
         tradeNamePresent: Object.hasOwn(information, "TETradeName"),
         tradeName: jsonMultilingual(information.TETradeName),
         address: jsonAddress(information.TEAddress, `${path}/TrustedEntityInformation/TEAddress`, "TEPostalAddress", "TEElectronicAddress"),
-        informationUris: jsonMultilingual(information.TEInformationURI),
+        informationUris: jsonMultilingual(information.TEInformationURI, `${path}/TrustedEntityInformation/TEInformationURI`),
         extensionsPresent: Object.hasOwn(information, "TEInformationExtensions"),
         extensions: jsonExtensions(information.TEInformationExtensions, `${path}/TrustedEntityInformation/TEInformationExtensions`, "entity"),
         services: services.map((service, serviceIndex) => jsonService(service, `${path}/TrustedEntityServices/${serviceIndex}`)),
@@ -211,7 +212,7 @@ function jsonService(value: unknown, path: string): Ts119602ServiceObservation {
       ["ServiceName", "ServiceDigitalIdentity"],
     ),
     informationPresent: isRecord(informationValue),
-    name: jsonMultilingual(information.ServiceName),
+    name: jsonMultilingual(information.ServiceName, `${path}/ServiceInformation/ServiceName`),
     identity: jsonIdentity(information.ServiceDigitalIdentity, `${path}/ServiceInformation/ServiceDigitalIdentity`),
     typeIdentifier: { present: Object.hasOwn(information, "ServiceTypeIdentifier"), value: information.ServiceTypeIdentifier },
     status: { present: Object.hasOwn(information, "ServiceStatus"), value: information.ServiceStatus },
@@ -362,8 +363,12 @@ function postalAddressValue(value: unknown): unknown {
   return parts.length > 0 ? parts.join(" ") : undefined;
 }
 
-function jsonMultilingual(value: unknown): Array<{ language: unknown; value: unknown }> {
-  return asArray(value).map((entry) => ({ language: getPath(entry, ["lang"]), value: getPath(entry, ["value"]) ?? getPath(entry, ["uriValue"]) }));
+function jsonMultilingual(value: unknown, path?: string): Array<{ language: unknown; value: unknown; path?: string }> {
+  return asArray(value).map((entry, index) => ({
+    language: getPath(entry, ["lang"]),
+    value: getPath(entry, ["value"]) ?? getPath(entry, ["uriValue"]),
+    path: path ? `${path}/${index}` : undefined,
+  }));
 }
 
 function jsonUriValues(value: unknown): unknown[] {

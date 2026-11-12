@@ -16,6 +16,7 @@ import { buildStandardAssessment } from "./standards/assessment.js";
 import { assessTs119602AlternativeXml } from "./standards/ts119602AlternativeXml.js";
 import { classifyTs119602Artifact, createUnknownTs119602Classification } from "./standards/ts119602Classification.js";
 import { assessTs119602Context } from "./standards/ts119602Context.js";
+import { TS119602_INTEROPERABILITY_WARNING_IDS } from "./standards/ts119602Entities.js";
 import { auditTs119602Coverage, inferTs119602CoverageSchemeMode, ts119602CoverageFinding } from "./standards/ts119602Coverage.js";
 import { assessTs119612Context } from "./standards/ts119612Context.js";
 import { auditTs119612Coverage, ts119612CoverageFinding } from "./standards/ts119612Coverage.js";
@@ -436,7 +437,7 @@ async function applyContext(
     result.ts119602 = buildStandardAssessment([
       ...result.ts119602.checks.filter((entry) => !replacementIds.has(entry.id)),
       ...contextual,
-    ], { coverageComplete: false });
+    ], { coverageComplete: false, nonConformanceWarningIds: TS119602_INTEROPERABILITY_WARNING_IDS });
   }
   return finalizeTs119602Coverage(result);
 }
@@ -450,7 +451,10 @@ function finalizeTs119602Coverage(result: TrustedListAuditResult): TrustedListAu
   }, checks);
   checks.push(ts119602CoverageFinding(coverage));
   result.ts119602Coverage = coverage;
-  result.ts119602 = buildStandardAssessment(checks, { coverageComplete: coverage.completeVerdictEligible });
+  result.ts119602 = buildStandardAssessment(checks, {
+    coverageComplete: coverage.completeVerdictEligible,
+    nonConformanceWarningIds: TS119602_INTEROPERABILITY_WARNING_IDS,
+  });
   return result;
 }
 

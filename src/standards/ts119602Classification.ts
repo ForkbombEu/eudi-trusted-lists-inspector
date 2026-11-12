@@ -91,7 +91,14 @@ function classifyXml(
   const embeddedProfile = profileFromLoteType(embeddedType);
   const profile = selectProfile(embeddedProfile, declaredProfile);
   const profileStatus = profileSelectionStatus(embeddedProfile, declaredProfile);
-  const evidence = { rootLocalName, rootNamespace, embeddedType, declaredType, embeddedProfile, declaredProfile };
+  const evidence = {
+    rootLocalName,
+    rootNamespace: detection.artifactKind === "xml_lote" ? rootNamespace ?? "" : rootNamespace,
+    embeddedType,
+    declaredType,
+    embeddedProfile,
+    declaredProfile,
+  };
 
   if (detection.artifactKind === "xml_lote") {
     const normativeRoot = rootLocalName === "ListOfTrustedEntities" && rootNamespace === TS119602_NAMESPACE;

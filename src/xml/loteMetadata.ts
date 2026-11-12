@@ -2,6 +2,7 @@ import { buildStandardAssessment } from "../standards/assessment.js";
 import {
   buildTs119602EntityFindings,
   TS119602_ENTITY_EXTENSION_REGISTRY,
+  TS119602_INTEROPERABILITY_WARNING_IDS,
   TS119602_SERVICE_EXTENSION_REGISTRY,
   type Ts119602EntitiesInput,
   type Ts119602IdentityObservation,
@@ -123,7 +124,7 @@ export async function assessXmlLoteMetadata(
   const certificates = [...signature.certificates, ...entityAssessment.certificates];
   return {
     detected: { format: "xml", artifactKind: "xml_lote" },
-    ts119602: buildStandardAssessment(checks, { coverageComplete: false }),
+    ts119602: buildStandardAssessment(checks, { coverageComplete: false, nonConformanceWarningIds: TS119602_INTEROPERABILITY_WARNING_IDS }),
     extracted: {
       schemeOperatorName: names(root, `${INFO}/*[local-name()='SchemeOperatorName']`),
       schemeName: names(root, `${INFO}/*[local-name()='SchemeName']`),
@@ -214,7 +215,7 @@ function xmlLoteBinding(root: Element): XmlLoteBinding {
 function xmlBindingCheck(root: Element, binding: XmlLoteBinding): CheckResult {
   const commonEvidence = {
     observedRootLocalName: root.localName || root.nodeName,
-    observedRootNamespace: root.namespaceURI ?? undefined,
+    observedRootNamespace: root.namespaceURI ?? "",
     expectedRootLocalName: "ListOfTrustedEntities",
     expectedRootNamespace: ETSI_TS119602_NAMESPACE,
     normativeEntityPath: "/ListOfTrustedEntities/TrustedEntitiesList/TrustedEntity",
@@ -585,8 +586,13 @@ function xmlAddress(node: Node | undefined): Ts119602EntitiesInput["entities"][n
   };
 }
 
-function xmlMultilingual(context: Node, expression: string): Array<{ language: unknown; value: unknown }> {
-  return nodes(context, expression).map((entry) => ({ language: (entry as Element).getAttributeNS("http://www.w3.org/XML/1998/namespace", "lang") || undefined, value: nodeText(entry) }));
+function xmlMultilingual(context: Node, expression: string): Array<{ language: unknown; value: unknown; path: string; hasElementContent: boolean }> {
+  return nodes(context, expression).map((entry) => ({
+    language: (entry as Element).getAttributeNS("http://www.w3.org/XML/1998/namespace", "lang") || undefined,
+    value: nodeText(entry),
+    path: xmlNodePath(entry),
+    hasElementContent: Array.from(entry.childNodes).some((child) => child.nodeType === 1),
+  }));
 }
 
 function xmlTypedExtension(element: Element, kind: "entity" | "service"): Ts119602ServiceExtensionObservation {
