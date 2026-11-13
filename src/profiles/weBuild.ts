@@ -1,6 +1,7 @@
 import { tryCertificateFromBase64 } from "../certs.js";
 import { asArray, getPath, isRecord } from "../lotl.js";
 import type { ParsedLotl } from "../lotl.js";
+import { observedRolesForServiceTypes } from "./ts119612ReferenceProfiles.js";
 import type { CheckResult, TrustedListAuditResult } from "../types.js";
 
 export type WeBuildRole = "wallet_provider" | "pid_provider" | "wrpac_provider" | "wrprc_provider" | "pub_eaa_provider" | "registrar_or_register" | "qeaa_provider" | "unknown";
@@ -10,6 +11,7 @@ export interface WeBuildProfileSummary {
   recognitionReasons: string[];
   listTypeCounts: Record<string, number>;
   roleCounts: Record<string, number>;
+  observedRoleCounts: Record<string, number>;
   pointerConsistency: {
     declaredMimeMismatches: number;
     duplicateLocations: number;
@@ -29,16 +31,19 @@ export function assessWeBuildProfile(lotl: ParsedLotl, results: TrustedListAudit
     recognitionReasons,
     listTypeCounts: {},
     roleCounts: {},
+    observedRoleCounts: {},
     pointerConsistency: { declaredMimeMismatches: 0, duplicateLocations: 0, pointersMissingServiceDigitalIdentities: 0, pointersMissingQualifiers: 0, pointerCertificatesParsed: 0, pointerCertificatesInvalidAtAssessment: 0 },
   };
   if (!summary.recognized) return summary;
+  const resultsByIndex = new Map(results.map((result) => [result.index, result]));
   for (const pointer of lotl.pointers) {
-    const result = results[pointer.index - 1];
+    const result = resultsByIndex.get(pointer.index);
     if (!result) continue;
     const classification = classifyWeBuildListType(pointer.declared.loteType, result.detected.artifactKind);
     increment(summary.listTypeCounts, classification.listType);
     increment(summary.roleCounts, classification.role);
     const checks = pointerChecks(pointer, result, lotl.summary.duplicateLocations, summary, assessmentDate, classification);
+    if (classification.listType === "EUgeneric" || classification.listType === "EUgeneric_or_qeaa_xml_tl") checks.push(observedRolesCheck(result, summary, classification.role));
     result.ts119612.checks.push(...checks);
     result.ts119612.warnings.push(...checks.filter((check) => check.status === "warn" || check.status === "not_checked").map((check) => `${check.id}: ${check.message}`));
   }
@@ -53,7 +58,8 @@ export function classifyWeBuildListType(loteType: string | undefined, artifactKi
   if (/EUWRPRCProvidersList/i.test(value)) return { listType: "EUWRPRCProvidersList", role: "wrprc_provider" };
   if (/EUPubEAAProvidersList/i.test(value)) return { listType: "EUPubEAAProvidersList", role: "pub_eaa_provider" };
   if (/EURegistrarsAndRegistersList/i.test(value)) return { listType: "EURegistrarsAndRegistersList", role: "registrar_or_register" };
-  if (/EUgeneric|QEAA/i.test(value) || artifactKind === "ts119612_xml_tsl") return { listType: "EUgeneric_or_qeaa_xml_tl", role: "qeaa_provider" };
+  if (/EUgeneric/i.test(value)) return { listType: "EUgeneric", role: "unknown" };
+  if (/QEAA/i.test(value)) return { listType: "EUgeneric_or_qeaa_xml_tl", role: "qeaa_provider" };
   return { listType: "unknown", role: "unknown" };
 }
 
@@ -96,6 +102,29 @@ function pointerChecks(pointer: ParsedLotl["pointers"][number], result: TrustedL
     checks.push(check("we_build.pointer.certificate_evidence", parseable.length === certificates.length && invalid.length === 0 ? "pass" : "warn", parseable.length === certificates.length && invalid.length === 0 ? "info" : "warning", parseable.length === certificates.length ? invalid.length === 0 ? "Pointer certificates parsed and are valid at assessment time." : "Pointer certificates parsed, but one or more are expired or not yet valid." : "One or more pointer certificates could not be parsed.", { present: certificates.length, parsed: parseable.length, invalidAtAssessment: invalid.length, certificates: parseable }));
   }
   return checks;
+}
+
+function observedRolesCheck(result: TrustedListAuditResult, summary: WeBuildProfileSummary, declaredRole: WeBuildRole): CheckResult {
+  const hasEvidence = result.fetch.attempted && result.fetch.ok
+    && result.detected.artifactKind === "ts119612_xml_tsl"
+    && result.extracted?.currentServiceTypeIdentifiers !== undefined;
+  const currentServiceTypeIdentifiers = result.extracted?.currentServiceTypeIdentifiers ?? [];
+  if (!hasEvidence) {
+    return check("we_build.pointer.observed_roles", "not_checked", "info", "Observed roles were not checked because no fetched, recognized TS 119 612 current-service evidence is available.", { declaredRole, observedRoles: [], currentServiceTypeIdentifiers, outcome: "no_evidence" });
+  }
+  const observedRoles = observedRolesForServiceTypes(currentServiceTypeIdentifiers);
+  for (const role of observedRoles) increment(summary.observedRoleCounts, role);
+  if (observedRoles.length === 0) {
+    return check("we_build.pointer.observed_roles", "warn", "warning", "No EUDI role was observed from the exact current-service type identifiers of the fetched list.", { declaredRole, observedRoles, currentServiceTypeIdentifiers, outcome: "no_observed_role" });
+  }
+  const mismatch = declaredRole !== "unknown" && !observedRoles.some((role) => role === declaredRole);
+  return check(
+    "we_build.pointer.observed_roles",
+    mismatch ? "warn" : "pass",
+    mismatch ? "warning" : "info",
+    mismatch ? "Declared and observed pointer roles differ." : "Observed roles use exact current-service type identifiers.",
+    { declaredRole, observedRoles, currentServiceTypeIdentifiers, outcome: mismatch ? "declared_observed_mismatch" : "observed" },
+  );
 }
 
 function declaredFormat(mimeType: string | undefined): "xml" | "json" | undefined { if (!mimeType) return undefined; if (/xml/i.test(mimeType)) return "xml"; if (/json/i.test(mimeType)) return "json"; return undefined; }

@@ -59,8 +59,8 @@ bounded, and write only under ignored artifact directories.
 ### Implemented baseline
 
 The existing TS 119 612 assessor provides useful evidence and is inventoried
-by a 69-family requirements ledger. Only 15 families are implemented completely;
-45 are partial and 9 are not implemented, so it must not be treated as a
+by a 69-family requirements ledger. Only 16 families are implemented completely;
+45 are partial and 8 are not implemented, so it must not be treated as a
 complete conformance validator.
 
 | Baseline task | Implemented scope | Status |
@@ -78,7 +78,7 @@ complete conformance validator.
 | TS612-B11 | Supplied prior-list sequence and retained-state comparison, distribution byte equality, pointer signer-certificate authentication, duplicate-fetch caching, cycle detection and bounded cross-list traversal | Complete task scope; dereferencing remains opt-in and public-key/SKI-only authentication remains unsupported |
 | TS612-B12 | Isolated EUDI RI and WE BUILD TS 119 612 reference-profile recognition, endpoint/artifact shape, role classification, role trust-anchor evidence and distribution observations in JSON, Markdown and OpenAPI | Complete task scope; observed reference behavior is non-normative and never implies production trust |
 | TS612-B13 | Ledger-linked deterministic positive/negative coverage for every implemented family, lossless standard-finding Markdown rendering, CLI report-file parity, API re-render parity and an executable OpenAPI report example | Complete task scope; partial and not-implemented families remain explicit for TS612-12 |
-| TS612-B14 | Structured 69-family per-artifact coverage audit, explicit partial/not-implemented/contextual blockers, audit-driven complete-verdict eligibility and bounded manual EUDI RI/WE BUILD live-smoke procedure | Complete task scope; the current 45 partial and 9 not-implemented families keep complete verdicts disabled |
+| TS612-B14 | Structured 69-family per-artifact coverage audit, explicit partial/not-implemented/contextual blockers, audit-driven complete-verdict eligibility and bounded manual EUDI RI/WE BUILD live-smoke procedure | Complete task scope; the current 45 partial and 8 not-implemented families keep complete verdicts disabled |
 
 #### What TS 119 612 does not yet prove
 

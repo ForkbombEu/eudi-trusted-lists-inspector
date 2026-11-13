@@ -1,4 +1,5 @@
 import { certificateFingerprintSha256 } from "./certs.js";
+import { parseCompactJades } from "./json/jades.js";
 import type { PointerInfo } from "./types.js";
 import { parseXml } from "./xml/parse.js";
 
@@ -51,36 +52,58 @@ export function parseLotl(text: string): ParsedLotl {
 
 export function parseLotlJson(text: string): ParsedLotl {
   let raw: unknown;
-  try {
-    raw = JSON.parse(text) as unknown;
-  } catch (cause) {
-    throw new LotlParseError(
-      `Invalid JSON LoTL: ${cause instanceof Error ? cause.message : String(cause)}`,
-      "json",
-    );
+  if (looksLikeCompactJws(text)) {
+    const compact = parseCompactJades(text);
+    if (compact.detachedPayload) {
+      throw new LotlParseError("Detached compact JAdES LoTL input is unsupported without external payload bytes.", "json");
+    }
+    if (!compact.serializationValid || compact.parsedPayload === undefined) {
+      throw new LotlParseError(`Invalid compact JAdES LoTL: ${compact.errors.join("; ") || "payload unavailable"}`, "json");
+    }
+    raw = compact.parsedPayload;
+  } else {
+    try {
+      raw = JSON.parse(text) as unknown;
+    } catch (cause) {
+      throw new LotlParseError(
+        `Invalid JSON LoTL: ${cause instanceof Error ? cause.message : String(cause)}`,
+        "json",
+      );
+    }
   }
-  const info = getPath(raw, ["LoTE", "ListAndSchemeInformation"]);
+  const lote = getPath(raw, ["LoTE"]);
+  const info = getPath(lote, ["ListAndSchemeInformation"]);
+  if (!isRecord(raw) || Array.isArray(raw) || !isRecord(lote) || Array.isArray(lote) || !isRecord(info) || Array.isArray(info)) {
+    throw new LotlParseError("JSON LoTL must contain LoTE.ListAndSchemeInformation objects.", "json");
+  }
+  const loteType = firstString(getPath(info, ["LoTEType"]));
+  if (!loteType || !JSON_LOTL_TYPE_SEGMENT.test(loteType)) {
+    throw new LotlParseError("JSON LoTL must declare a recognized list-of-trusted-lists type.", "json");
+  }
   const pointerValue = getPath(info, ["PointersToOtherLoTE"]);
-  const pointerArray = asArray(pointerValue);
-  const pointers = pointerArray.flatMap((pointer, zeroIndex) => {
+  if (!Array.isArray(pointerValue) || pointerValue.length === 0) {
+    throw new LotlParseError("JSON LoTL must contain a non-empty PointersToOtherLoTE array.", "json");
+  }
+  const pointers = pointerValue.map((pointer, zeroIndex): PointerInfo => {
+    if (!isRecord(pointer) || Array.isArray(pointer)) {
+      throw new LotlParseError(`JSON LoTL pointer ${zeroIndex + 1} must be an object.`, "json");
+    }
     const location = stringValue(getPath(pointer, ["LoTELocation"]));
     if (!location) {
-      return [];
+      throw new LotlParseError(`JSON LoTL pointer ${zeroIndex + 1} must contain one non-empty LoTELocation.`, "json");
     }
-    return [
-      {
-        index: zeroIndex + 1,
-        location,
-        declared: {
-          mimeType: qualifierValue(pointer, "MimeType"),
-          loteType: qualifierValue(pointer, "LoTEType"),
-          schemeOperatorName: firstString(getPath(pointer, ["SchemeOperatorName"])),
-          schemeTerritory: firstString(getPath(pointer, ["SchemeTerritory"])),
-          pointerCertificateFingerprintsSha256: extractPointerFingerprints(pointer),
-        },
-        raw: pointer,
+    return {
+      index: zeroIndex + 1,
+      location,
+      declared: {
+        mimeType: qualifierValue(pointer, "MimeType"),
+        loteType: qualifierValue(pointer, "LoTEType"),
+        schemeOperatorName: firstString(getPath(pointer, ["SchemeOperatorName"])),
+        schemeTerritory: firstString(getPath(pointer, ["SchemeTerritory"])),
+        pointerCertificateFingerprintsSha256: extractPointerFingerprints(pointer),
       },
-    ];
+      raw: pointer,
+    };
   });
 
   return parsedLotl(
@@ -237,6 +260,14 @@ function parsedLotl(
         .map(([location]) => location),
     },
   };
+}
+
+// The final URI segment must name a list of lists (WE BUILD WP4 EUListOfTrustedLists,
+// TS 119 612 EUlistofthelists, or a generic ListOfLists); LoTE types are rejected.
+const JSON_LOTL_TYPE_SEGMENT = /(?:^|[/#:])[A-Za-z]*(?:ListOfTrustedLists|ListOfLists|ListOfTheLists)$/i;
+
+function looksLikeCompactJws(text: string): boolean {
+  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+$/.test(text.trim());
 }
 
 function acceptedLotlType(type: string, territory: string): boolean {

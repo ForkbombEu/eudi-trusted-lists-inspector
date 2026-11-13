@@ -56,6 +56,12 @@ const standardXmlLote = `<?xml version="1.0"?>
   </TrustedEntitiesList>
 </ListOfTrustedEntities>`;
 
+function withHistory(nameContent: string): string {
+  return standardXmlLote
+    .replace("<ListIssueDateTime>", "<HistoricalInformationPeriod>30</HistoricalInformationPeriod><ListIssueDateTime>")
+    .replace("</ServiceInformation>", `<ServiceStatus>https://example.test/status/current</ServiceStatus><StatusStartingTime>2026-07-10T00:00:00Z</StatusStartingTime></ServiceInformation><ServiceHistory><ServiceHistoryInstance><ServiceName><Name xml:lang="en">${nameContent}</Name></ServiceName><ServiceDigitalIdentity><DigitalId><OtherId>urn:example:history-identity</OtherId></DigitalId></ServiceDigitalIdentity><ServiceStatus>https://example.test/status/previous</ServiceStatus><StatusStartingTime>2026-07-09T12:00:00Z</StatusStartingTime></ServiceHistoryInstance></ServiceHistory>`);
+}
+
 const weBuildCompatibilityXmlLote = `<?xml version="1.0"?>
 <TrustedEntitiesList xmlns="http://uri.etsi.org/019602/v1#" LOTETag="https://uri.etsi.org/19602/LOTETag/">
   ${schemeInformation}
@@ -197,6 +203,62 @@ describe("ETSI TS 119 602 XML LoTE metadata", () => {
     expect(result.ts119602.warnings).toContain(
       "xml_lote.structure.xml_binding: TrustedEntitiesList is accepted as a WE BUILD compatibility root, but it is not conformant with the ETSI TS 119 602 V1.1.1 scheme-explicit XML binding.",
     );
+  });
+
+  it.each(["&#9;", "&#10;", "&#13;"])("validates boundary controls before trimming the current XML ServiceName %s", async (control) => {
+    const xml = standardXmlLote.replace("Standard entity service", `${control}Standard entity service`);
+    const result = await assessXmlLoteMetadata(xml, new Date("2026-07-21T00:00:00Z"));
+
+    expect(result.ts119602.checks).toContainEqual(expect.objectContaining({
+      id: "ts119602.service.name",
+      status: "fail",
+      severity: "error",
+      evidence: expect.objectContaining({
+        results: [expect.objectContaining({
+          validation: expect.objectContaining({
+            diagnostics: expect.arrayContaining([expect.objectContaining({ code: "multilingual.control_character" })]),
+          }),
+        })],
+      }),
+    }));
+  });
+
+  it.each([
+    ["boundary TAB", "&#9;Historical service", "multilingual.control_character"],
+    ["boundary LF", "Historical service&#10;", "multilingual.control_character"],
+    ["boundary CR", "&#13;Historical service", "multilingual.control_character"],
+    ["whitespace-only", "   ", "service_name.blank"],
+    ["nested", "<span>Historical service</span>", "service_name.nested_element"],
+  ] as const)("rejects %s historical XML ServiceName content", async (_label, content, diagnostic) => {
+    const result = await assessXmlLoteMetadata(withHistory(content), new Date("2026-07-21T00:00:00Z"));
+    const current = result.ts119602.checks.find((check) => check.id === "ts119602.service.name");
+    const history = result.ts119602.checks.find((check) => check.id === "ts119602.service.history");
+
+    expect(current).toMatchObject({ status: "pass" });
+    expect(history).toMatchObject({
+      status: "fail",
+      severity: "error",
+      evidence: expect.objectContaining({
+        results: [expect.objectContaining({
+          instances: [expect.objectContaining({
+            path: "/ListOfTrustedEntities[1]/TrustedEntitiesList[1]/TrustedEntity[1]/TrustedEntityServices[1]/TrustedEntityService[1]/ServiceHistory[1]/ServiceHistoryInstance[1]",
+            name: expect.objectContaining({
+              diagnostics: expect.arrayContaining([expect.objectContaining({ code: diagnostic })]),
+            }),
+            blankNamePaths: diagnostic === "service_name.blank" ? ["/ListOfTrustedEntities[1]/TrustedEntitiesList[1]/TrustedEntity[1]/TrustedEntityServices[1]/TrustedEntityService[1]/ServiceHistory[1]/ServiceHistoryInstance[1]/ServiceName[1]/Name[1]"] : [],
+            nestedNamePaths: diagnostic === "service_name.nested_element" ? ["/ListOfTrustedEntities[1]/TrustedEntitiesList[1]/TrustedEntity[1]/TrustedEntityServices[1]/TrustedEntityService[1]/ServiceHistory[1]/ServiceHistoryInstance[1]/ServiceName[1]/Name[1]"] : [],
+          })],
+        })],
+      }),
+    });
+  });
+
+  it("accepts valid direct current and historical XML ServiceName text", async () => {
+    const result = await assessXmlLoteMetadata(withHistory("Historical service"), new Date("2026-07-21T00:00:00Z"));
+    expect(result.ts119602.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "ts119602.service.name", status: "pass" }),
+      expect.objectContaining({ id: "ts119602.service.history", status: "pass" }),
+    ]));
   });
 
   it("extracts IDunion diagnostics while validating the original unqualified root bytes", async () => {

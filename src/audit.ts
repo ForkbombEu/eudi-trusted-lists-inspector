@@ -116,6 +116,15 @@ export async function runAudit(options: CliOptions, version: string): Promise<Au
 export async function runAuditInMemory(options: InMemoryAuditOptions, version: string): Promise<AuditInMemoryResult> {
   const parsedLotl = parseLotl(options.lotlText);
   const generatedAt = new Date().toISOString();
+  const lotlAssessment = await assessArtifactContent({
+    content: options.lotlText,
+    source: options.source,
+    strict: options.strict,
+    includeJsonLoteChecks: options.includeJsonLoteChecks,
+    xsd: options.xsd,
+    context: options.fetch ? options.context : options.context ? { ...options.context, dereference: false } : undefined,
+    timeoutMs: options.timeoutMs,
+  });
 
   const results = await mapConcurrent(parsedLotl.pointers, options.concurrency, (pointer) => auditPointer(pointer, options));
   const weBuildProfile = assessWeBuildProfile(parsedLotl, results);
@@ -151,6 +160,7 @@ export async function runAuditInMemory(options: InMemoryAuditOptions, version: s
       sha256: options.sha256 ?? sha256Hex(Buffer.from(options.lotlText, "utf8")),
     },
     lotl: parsedLotl.summary,
+    lotlAssessment,
     weBuildProfile,
     fixtureReadiness,
     fcafTrustedAuthorities,

@@ -4,6 +4,40 @@ import { assessTs119612Xml } from "../src/xml/ts119612Checks.js";
 import type { XsdCommandRunner } from "../src/xml/xsd.js";
 
 describe("assessTs119612Xml", () => {
+  it.each([
+    ["TL", "test/fixtures/ts119612-scheme-information-valid.xml", "ts119612_xml_tsl"],
+    ["LoTL", "test/fixtures/lotl-ts119612.xml", "ts119612_xml_lotl"],
+  ] as const)("validates the registered root TSLTag for a V2.4.1 %s", async (_label, fixture, artifactKind) => {
+    const xml = await readFile(fixture, "utf8");
+    const valid = await assessTs119612Xml(xml, { strict: false });
+    expect(valid.detected.artifactKind).toBe(artifactKind);
+    expect(valid.ts119612.checks).toContainEqual(expect.objectContaining({
+      id: "ts119612.structure.tsl_tag",
+      status: "pass",
+      evidence: expect.objectContaining({
+        outcome: "valid",
+        expected: "http://uri.etsi.org/19612/TSLTag",
+        observed: "http://uri.etsi.org/19612/TSLTag",
+      }),
+    }));
+
+    const absent = await assessTs119612Xml(xml.replace(/\sTSLTag="[^"]*"/, ""), { strict: false });
+    expect(absent.ts119612.checks).toContainEqual(expect.objectContaining({
+      id: "ts119612.structure.tsl_tag",
+      status: "fail",
+      severity: "critical",
+      evidence: expect.objectContaining({ outcome: "absent", observed: null }),
+    }));
+
+    const invalid = await assessTs119612Xml(xml.replace(/TSLTag="[^"]*"/, 'TSLTag="https://example.test/other"'), { strict: false });
+    expect(invalid.ts119612.checks).toContainEqual(expect.objectContaining({
+      id: "ts119612.structure.tsl_tag",
+      status: "fail",
+      severity: "critical",
+      evidence: expect.objectContaining({ outcome: "invalid", observed: "https://example.test/other" }),
+    }));
+  });
+
   it("reports granular checks for valid-ish XML", async () => {
     const xml = await readFile("test/fixtures/tsl-valid-ish.xml", "utf8");
     const result = await assessTs119612Xml(xml, {
@@ -17,7 +51,7 @@ describe("assessTs119612Xml", () => {
     expect(result.extracted?.serviceCount).toBeGreaterThan(0);
     expect(result.ts119612.conformanceLevel).not.toBe("conformant");
     expect(result.ts119612Coverage).toMatchObject({
-      ledger: { total: 69, applicable: 69, implemented: 15, partial: 45, notImplemented: 9 },
+      ledger: { total: 69, applicable: 69, implemented: 16, partial: 45, notImplemented: 8 },
       completeVerdictEligible: false,
     });
     expect(result.ts119612Coverage?.requirements).toHaveLength(69);
@@ -32,7 +66,7 @@ describe("assessTs119612Xml", () => {
           status: "not_checked",
           evidence: expect.objectContaining({
             total: 69,
-            implemented: 15,
+            implemented: 16,
             complete: false,
             applicable: 69,
             completeVerdictEligible: false,
@@ -96,6 +130,11 @@ describe("assessTs119612Xml", () => {
         selection: expect.objectContaining({ mode: "automatic_pinned" }),
       }),
     }));
+    expect(result.ts119612.checks).toContainEqual(expect.objectContaining({
+      id: "ts119612.structure.tsl_tag",
+      status: "not_applicable",
+      evidence: expect.objectContaining({ reason: "compatibility_namespace" }),
+    }));
   });
 
   it("accepts the canonical namespace without a namespace warning", async () => {
@@ -105,7 +144,8 @@ describe("assessTs119612Xml", () => {
         : { code: 0, stdout: "", stderr: "" }
     ));
     const xml = (await readFile("test/fixtures/tsl-valid-ish.xml", "utf8"))
-      .replace("http://uri.etsi.org/19612/v2.4.1#", "http://uri.etsi.org/02231/v2#");
+      .replace("http://uri.etsi.org/19612/v2.4.1#", "http://uri.etsi.org/02231/v2#")
+      .replace('Id="TSL-TEST"', 'TSLTag="http://uri.etsi.org/19612/TSLTag" Id="TSL-TEST"');
     const result = await assessTs119612Xml(xml, {
       strict: false,
       xsdDependencies: { commandRunner: runner },
@@ -151,6 +191,11 @@ describe("assessTs119612Xml", () => {
       evidence: expect.objectContaining({
         selection: expect.objectContaining({ observedTslVersionIdentifier: "5" }),
       }),
+    }));
+    expect(result.ts119612.checks).toContainEqual(expect.objectContaining({
+      id: "ts119612.structure.tsl_tag",
+      status: "not_applicable",
+      evidence: expect.objectContaining({ reason: "format_version_not_selected" }),
     }));
     expect(result.ts119612.conformanceLevel).not.toBe("conformant");
   });

@@ -29,7 +29,8 @@ describe("WE BUILD profile", () => {
     expect(classifyWeBuildListType("http://uri.etsi.org/19602/LoTEType/EUWRPRCProvidersList").role).toBe("wrprc_provider");
     expect(classifyWeBuildListType("http://uri.etsi.org/19602/LoTEType/EUPubEAAProvidersList").role).toBe("pub_eaa_provider");
     expect(classifyWeBuildListType("http://uri.etsi.org/19602/LoTEType/EURegistrarsAndRegistersList").role).toBe("registrar_or_register");
-    expect(classifyWeBuildListType("http://uri.etsi.org/19602/LoTEType/EUgeneric").role).toBe("qeaa_provider");
+    expect(classifyWeBuildListType("http://uri.etsi.org/19602/LoTEType/EUgeneric")).toEqual({ listType: "EUgeneric", role: "unknown" });
+    expect(classifyWeBuildListType(undefined, "ts119612_xml_tsl").role).toBe("unknown");
   });
 
   it("summarizes roles and pointer consistency for a reduced WE BUILD LoTL", async () => {
@@ -55,5 +56,57 @@ describe("WE BUILD profile", () => {
       expect.objectContaining({ id: "we_build.pointer.duplicate_location", status: "warn" }),
       expect.objectContaining({ id: "we_build.pointer.certificate_evidence", status: "pass" }),
     ]));
+  });
+
+  it("correlates compacted results by original pointer index", async () => {
+    const lotl = parseLotlJson(await readFile("test/fixtures/we-build-lotl-profile.json", "utf8"));
+    lotl.pointers = lotl.pointers.slice(0, 2).map((pointer, index) => ({ ...pointer, index: index + 2 }));
+    const results = [result(2, "json"), result(3, "xml")];
+
+    const summary = assessWeBuildProfile(lotl, results);
+
+    expect(summary.roleCounts).toMatchObject({ wallet_provider: 1, wrpac_provider: 1 });
+    expect(results[0].ts119612.checks).toContainEqual(expect.objectContaining({
+      id: "we_build.pointer.list_type",
+      evidence: expect.objectContaining({ listType: "EUWalletProvidersList", role: "wallet_provider" }),
+    }));
+    expect(results[1].ts119612.checks).toContainEqual(expect.objectContaining({
+      id: "we_build.pointer.list_type",
+      evidence: expect.objectContaining({ listType: "EUWRPACProvidersList", role: "wrpac_provider" }),
+    }));
+  });
+
+  it("counts deduplicated observed roles only from current-service evidence", async () => {
+    const lotl = parseLotlJson(await readFile("test/fixtures/we-build-lotl-profile.json", "utf8"));
+    lotl.pointers = [lotl.pointers[0], lotl.pointers[0], lotl.pointers[0]].map((pointer, index) => ({
+      ...pointer,
+      index: index + 1,
+      location: `https://example.test/generic-${index}.xml`,
+      declared: { ...pointer.declared, loteType: "http://uri.etsi.org/TrstSvc/TrustedList/TSLType/EUgeneric" },
+    }));
+    const eaa = result(1, "xml");
+    eaa.extracted = { currentServiceTypeIdentifiers: ["http://uri.etsi.org/TrstSvc/Svctype/EAA", "http://uri.etsi.org/TrstSvc/Svctype/EAA"] };
+    const mixed = result(2, "xml");
+    mixed.extracted = { currentServiceTypeIdentifiers: ["http://uri.etsi.org/TrstSvc/Svctype/EAA", "http://uri.etsi.org/TrstSvc/Svctype/EAA/Q"] };
+    const missing = result(3, "xml");
+    missing.fetch = { attempted: false, ok: true };
+
+    const summary = assessWeBuildProfile(lotl, [eaa, mixed, missing]);
+
+    expect(summary.roleCounts).toEqual({ unknown: 3 });
+    expect(summary.observedRoleCounts).toEqual({ eaa_provider: 2, qeaa_provider: 1 });
+    expect(eaa.ts119612.checks).toContainEqual(expect.objectContaining({
+      id: "we_build.pointer.observed_roles",
+      status: "pass",
+      evidence: expect.objectContaining({ observedRoles: ["eaa_provider"] }),
+    }));
+    expect(mixed.ts119612.checks).toContainEqual(expect.objectContaining({
+      id: "we_build.pointer.observed_roles",
+      evidence: expect.objectContaining({ observedRoles: ["eaa_provider", "qeaa_provider"] }),
+    }));
+    expect(missing.ts119612.checks).toContainEqual(expect.objectContaining({
+      id: "we_build.pointer.observed_roles",
+      status: "not_checked",
+    }));
   });
 });

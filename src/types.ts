@@ -257,11 +257,13 @@ export interface AuditReport {
     uniqueLocationCount: number;
     duplicateLocations: string[];
   };
+  lotlAssessment?: TrustedListAuditResult;
   weBuildProfile: {
     recognized: boolean;
     recognitionReasons: string[];
     listTypeCounts: Record<string, number>;
     roleCounts: Record<string, number>;
+    observedRoleCounts?: Record<string, number>;
     pointerConsistency: {
       declaredMimeMismatches: number;
       duplicateLocations: number;
@@ -358,6 +360,7 @@ export interface TrustedListAuditResult {
     distributionPoints?: string[];
     trustServiceProviderCount?: number;
     serviceCount?: number;
+    currentServiceTypeIdentifiers?: string[];
     certificates?: CertificateSummary[];
     jsonLote?: Record<string, unknown>;
   };

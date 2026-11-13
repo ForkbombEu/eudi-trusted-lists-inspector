@@ -17,9 +17,9 @@ describe("ETSI TS 119 612 ledger coverage audit", () => {
       total: 69,
       applicable: 69,
       notApplicable: 0,
-      implemented: 15,
+      implemented: 16,
       partial: 45,
-      notImplemented: 9,
+      notImplemented: 8,
       contextual: 26,
     });
     expect(audit.requirements).toHaveLength(69);

@@ -17,6 +17,7 @@ export interface Ts119602MultilingualValue {
   language: unknown;
   value: unknown;
   path?: string;
+  rawText?: unknown;
   hasElementContent?: boolean;
 }
 
@@ -222,8 +223,10 @@ export function validateTs119602MultilingualValues(
     if (typeof entry.language === "string" && language.outcome === "valid") languages.push(entry.language);
     if (typeof entry.value !== "string" || entry.value.length === 0) {
       diagnostics.push({ code: "multilingual.value_non_empty", message: "Each multilingual entry must contain a non-empty string value." });
-    } else {
-      diagnostics.push(...multilingualCharacterDiagnostics(entry.value));
+    }
+    const characterValue = typeof entry.rawText === "string" ? entry.rawText : entry.value;
+    if (typeof characterValue === "string" && characterValue.length > 0) {
+      diagnostics.push(...multilingualCharacterDiagnostics(characterValue));
     }
   }
   if (!languages.includes("en")) {

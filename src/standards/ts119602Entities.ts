@@ -233,33 +233,37 @@ function firstInformationUriSharingFinding(input: Ts119602EntitiesInput): CheckR
   );
 }
 
+function serviceNameValidation(serviceName: readonly Ts119602MultilingualValue[]) {
+  const baseValidation = validateTs119602MultilingualValues(serviceName);
+  const blankNames = serviceName.filter((entry) => typeof entry.value === "string" && entry.value.trim().length === 0);
+  const nestedNames = serviceName.filter((entry) => entry.hasElementContent);
+  const blankNamePaths = blankNames.flatMap((entry) => entry.path ? [entry.path] : []);
+  const nestedNamePaths = nestedNames.flatMap((entry) => entry.path ? [entry.path] : []);
+  const diagnostics = [...baseValidation.diagnostics];
+  if (blankNames.length > 0) diagnostics.push({ code: "service_name.blank", message: "ServiceName entries must contain non-whitespace text." });
+  if (nestedNames.length > 0) diagnostics.push({ code: "service_name.nested_element", message: "ServiceName Name elements must contain direct text without nested elements." });
+  const validation = { ...baseValidation, diagnostics, outcome: diagnostics.length === 0 ? "valid" as const : "invalid" as const };
+  return {
+    validation,
+    names: serviceName.map((entry) => ({
+      path: entry.path,
+      language: entry.language,
+      blank: typeof entry.value === "string" && entry.value.trim().length === 0,
+      nested: Boolean(entry.hasElementContent),
+    })),
+    blankNamePaths,
+    nestedNamePaths,
+    valid: validation.outcome === "valid",
+  };
+}
+
 function serviceNamesFinding(entities: Ts119602EntityObservation[]): CheckResult {
-  const results = entities.flatMap((entity) => entity.services.map((service) => {
-    const baseValidation = validateTs119602MultilingualValues(service.name);
-    const blankNames = service.name.filter((entry) => typeof entry.value === "string" && entry.value.trim().length === 0);
-    const nestedNames = service.name.filter((entry) => entry.hasElementContent);
-    const blankNamePaths = blankNames.flatMap((entry) => entry.path ? [entry.path] : []);
-    const nestedNamePaths = nestedNames.flatMap((entry) => entry.path ? [entry.path] : []);
-    const diagnostics = [...baseValidation.diagnostics];
-    if (blankNames.length > 0) diagnostics.push({ code: "service_name.blank", message: "ServiceName entries must contain non-whitespace text." });
-    if (nestedNames.length > 0) diagnostics.push({ code: "service_name.nested_element", message: "ServiceName Name elements must contain direct text without nested elements." });
-    const validation = { ...baseValidation, diagnostics, outcome: diagnostics.length === 0 ? "valid" as const : "invalid" as const };
-    return {
-      path: service.path,
-      entityPath: entity.path,
-      servicePath: service.path,
-      validation,
-      names: service.name.map((entry) => ({
-        path: entry.path,
-        language: entry.language,
-        blank: typeof entry.value === "string" && entry.value.trim().length === 0,
-        nested: Boolean(entry.hasElementContent),
-      })),
-      blankNamePaths,
-      nestedNamePaths,
-      valid: validation.outcome === "valid",
-    };
-  }));
+  const results = entities.flatMap((entity) => entity.services.map((service) => ({
+    path: service.path,
+    entityPath: entity.path,
+    servicePath: service.path,
+    ...serviceNameValidation(service.name),
+  })));
   if (results.length === 0) return finding("ts119602.service.name", "not_applicable", "info", "Service names are not applicable because no service was observed.");
   const invalidServiceCount = results.filter((entry) => !entry.valid).length;
   const blankNameCount = results.reduce((count, entry) => count + entry.names.filter((name) => name.blank).length, 0);
@@ -338,8 +342,18 @@ function historyFinding(services: Ts119602ServiceObservation[], historyPeriod: u
   const results = present.map((service) => {
     const instances = service.history.map((entry) => {
       const start = parseTs119602UtcDateTime(entry.statusStartingTime.value);
-      const name = validateTs119602MultilingualValues(entry.name);
-      return { path: entry.path, start, name, identityPresent: entry.identity.present, statusValid: entry.status.present && validateTs119602Uri(entry.status.value).outcome === "valid", valid: Boolean(start && name.outcome === "valid" && entry.identity.present && entry.status.present && validateTs119602Uri(entry.status.value).outcome === "valid") };
+      const nameValidation = serviceNameValidation(entry.name);
+      return {
+        path: entry.path,
+        start,
+        name: nameValidation.validation,
+        names: nameValidation.names,
+        blankNamePaths: nameValidation.blankNamePaths,
+        nestedNamePaths: nameValidation.nestedNamePaths,
+        identityPresent: entry.identity.present,
+        statusValid: entry.status.present && validateTs119602Uri(entry.status.value).outcome === "valid",
+        valid: Boolean(start && nameValidation.valid && entry.identity.present && entry.status.present && validateTs119602Uri(entry.status.value).outcome === "valid"),
+      };
     });
     const times = instances.map((entry) => entry.start?.getTime());
     const descending = times.every((time, index) => index === 0 || (time !== undefined && times[index - 1] !== undefined && (times[index - 1] as number) > time));

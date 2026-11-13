@@ -1,6 +1,7 @@
 export type EudiTrustRole =
   | "wallet_provider"
   | "pid_provider"
+  | "eaa_provider"
   | "qeaa_provider"
   | "pub_eaa_provider"
   | "access_ca_or_wrpac_provider"
@@ -10,6 +11,7 @@ export type EudiTrustRole =
 export const EUDI_TRUST_ROLES: readonly EudiTrustRole[] = [
   "wallet_provider",
   "pid_provider",
+  "eaa_provider",
   "qeaa_provider",
   "pub_eaa_provider",
   "access_ca_or_wrpac_provider",

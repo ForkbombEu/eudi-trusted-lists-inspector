@@ -169,7 +169,7 @@ describe("ETSI TS 119 612 contextual validation", () => {
       expect.objectContaining({ id: "ts119612.context.traversal", status: "not_checked" }),
     ]));
     expect(result.ts119612Coverage).toMatchObject({
-      applicableImplemented: { total: 15 },
+      applicableImplemented: { total: 16 },
       completeVerdictEligible: false,
       blockers: {
         nonConclusiveImplementedRequirementIds: expect.arrayContaining([

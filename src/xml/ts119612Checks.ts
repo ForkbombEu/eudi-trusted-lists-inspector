@@ -31,6 +31,7 @@ const CANONICAL_ETSI_NS = "http://uri.etsi.org/02231/v2#";
 const EUDI_RI_ETSI_NS_VARIANT = "http://uri.etsi.org/19612/v2.4.1#";
 const EU_APPROPRIATE = "http://uri.etsi.org/TrstSvc/TrustedList/StatusDetn/EUappropriate";
 const PUB_EAA_LOTE_TYPE = "http://uri.etsi.org/19602/LoTEType/EUPubEAAProvidersList";
+const TS119612_TSL_TAG = "http://uri.etsi.org/19612/TSLTag";
 
 export interface Ts119612XmlAssessment extends Pick<TrustedListAuditResult, "ts119612" | "ts119612Coverage" | "extracted" | "detected"> {
   ts119612Facts?: Ts119612ValidatedFacts;
@@ -137,6 +138,7 @@ export async function assessTs119612Xml(
   checks.push(...assessTs119612SchemeInformation(document, artifactKind));
 
   checks.push(bindingSelectionCheck(rootNs, extracted.tslVersionIdentifier));
+  checks.push(tslTagCheck(root, rootNs, extracted.tslVersionIdentifier));
   checkExists(checks, document, "structure.tsl_version_identifier", D("TSLVersionIdentifier"), "TSLVersionIdentifier exists.", "error");
   if (extracted.tslVersionIdentifier) {
     push(checks, "structure.tsl_version_identifier.value", "structure", extracted.tslVersionIdentifier === "6" ? "pass" : "warn", "warning", "TSLVersionIdentifier expected value is 6 for ETSI TS 119 612 v2.4.1 / TLv6.", extracted.tslVersionIdentifier);
@@ -205,6 +207,47 @@ function isTs119612Namespace(namespace: string | undefined): boolean {
   return namespace === CANONICAL_ETSI_NS || namespace === EUDI_RI_ETSI_NS_VARIANT;
 }
 
+function tslTagCheck(root: Element, namespace: string | undefined, versionIdentifier: string | undefined): CheckResult {
+  const present = root.hasAttribute("TSLTag");
+  const observed = present ? root.getAttribute("TSLTag") ?? "" : null;
+  const applicable = namespace === CANONICAL_ETSI_NS && versionIdentifier === String(TS119612_SOURCE.tslVersionIdentifier);
+  const reason = namespace !== CANONICAL_ETSI_NS ? "compatibility_namespace" : "format_version_not_selected";
+  const evidence = {
+    attribute: "TSLTag",
+    attributeNamespace: null,
+    expected: TS119612_TSL_TAG,
+    observed,
+    present,
+    outcome: !applicable ? "not_applicable" : !present ? "absent" : observed === TS119612_TSL_TAG ? "valid" : "invalid",
+    reason: applicable ? undefined : reason,
+    observedNamespace: namespace,
+    observedTslVersionIdentifier: versionIdentifier,
+  };
+  if (!applicable) {
+    return {
+      id: "ts119612.structure.tsl_tag",
+      category: "structure",
+      status: "not_applicable",
+      severity: "info",
+      message: "The V2.4.1 registered TSLTag rule is not selected for this compatibility namespace or format version.",
+      evidence,
+    };
+  }
+  const valid = present && observed === TS119612_TSL_TAG;
+  return {
+    id: "ts119612.structure.tsl_tag",
+    category: "structure",
+    status: valid ? "pass" : "fail",
+    severity: valid ? "info" : "critical",
+    message: valid
+      ? "The unqualified root TSLTag has the registered V2.4.1 value."
+      : present
+        ? "The unqualified root TSLTag does not have the registered V2.4.1 value."
+        : "The unqualified root TSLTag attribute is absent.",
+    evidence,
+  };
+}
+
 function bindingSelectionCheck(namespace: string | undefined, versionIdentifier: string | undefined): CheckResult {
   const canonical = namespace === TS119612_SOURCE.canonicalNamespace;
   const versionMatches = versionIdentifier === String(TS119612_SOURCE.tslVersionIdentifier);
@@ -256,6 +299,7 @@ function extractMetadata(document: Document): ExtractedMetadata {
     listIssueDateTime: text(document, D("ListIssueDateTime")),
     nextUpdate: text(document, `${D("NextUpdate")}//*[local-name()='dateTime'] | ${D("NextUpdate")}`),
     distributionPoints: texts(document, `${D("DistributionPoints")}//*[local-name()='URI']`),
+    currentServiceTypeIdentifiers: texts(document, ".//*[local-name()='TSPService']/*[local-name()='ServiceInformation']/*[local-name()='ServiceTypeIdentifier']"),
   };
 }
 

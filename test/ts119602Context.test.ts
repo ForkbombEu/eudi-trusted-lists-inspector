@@ -305,6 +305,7 @@ describe("ETSI TS 119 602 contextual validation", () => {
     const result = await runAuditFromJson({
       LoTE: {
         ListAndSchemeInformation: {
+          LoTEType: "http://uri.etsi.org/19602/LoTLType/EUListOfTrustedLists",
           PointersToOtherLoTE: [{ LoTELocation: "https://context.example.test/current.jws" }],
         },
       },

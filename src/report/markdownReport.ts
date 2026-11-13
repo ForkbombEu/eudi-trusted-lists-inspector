@@ -21,12 +21,14 @@ export function renderMarkdownReport(report: AuditReport): string {
   lines.push(`- Total pointers: ${report.lotl.pointerCount}`);
   lines.push(`- Unique locations: ${report.lotl.uniqueLocationCount}`);
   lines.push("");
+  if (report.lotlAssessment) renderResult(lines, report.lotlAssessment, "LoTL assessment");
   lines.push("## WE BUILD profile");
   lines.push("");
   lines.push(`- Recognized: ${report.weBuildProfile.recognized ? "yes" : "no"}`);
   lines.push(`- Recognition: ${report.weBuildProfile.recognitionReasons.join("; ") || "none"}`);
   lines.push(`- List types: ${countSummary(report.weBuildProfile.listTypeCounts)}`);
-  lines.push(`- Roles: ${countSummary(report.weBuildProfile.roleCounts)}`);
+  lines.push(`- Declared roles: ${countSummary(report.weBuildProfile.roleCounts)}`);
+  if (report.weBuildProfile.observedRoleCounts) lines.push(`- Observed roles: ${countSummary(report.weBuildProfile.observedRoleCounts)}`);
   lines.push(`- MIME mismatches: ${report.weBuildProfile.pointerConsistency.declaredMimeMismatches}; duplicate pointers: ${report.weBuildProfile.pointerConsistency.duplicateLocations}; missing ServiceDigitalIdentities: ${report.weBuildProfile.pointerConsistency.pointersMissingServiceDigitalIdentities}; missing LoTEQualifiers: ${report.weBuildProfile.pointerConsistency.pointersMissingQualifiers}`);
   lines.push("");
   lines.push("## Fixture readiness");
@@ -76,9 +78,9 @@ export function renderMarkdownReport(report: AuditReport): string {
   return `${lines.join("\n")}\n`;
 }
 
-function renderResult(lines: string[], result: TrustedListAuditResult): void {
+function renderResult(lines: string[], result: TrustedListAuditResult, heading?: string): void {
   lines.push("");
-  lines.push(`## ${result.index}. ${result.location}`);
+  lines.push(`## ${heading ?? `${result.index}. ${result.location}`}`);
   lines.push("");
   lines.push(`- Result ID: ${result.id}`);
   lines.push(`- Source: ${result.source}`);

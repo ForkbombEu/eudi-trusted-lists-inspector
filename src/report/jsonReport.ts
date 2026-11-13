@@ -4,6 +4,7 @@ export function buildAuditReport(args: {
   generatedAt: string;
   input: AuditReport["input"];
   lotl: AuditReport["lotl"];
+  lotlAssessment?: TrustedListAuditResult;
   weBuildProfile: AuditReport["weBuildProfile"];
   fixtureReadiness: AuditReport["fixtureReadiness"];
   fcafTrustedAuthorities: AuditReport["fcafTrustedAuthorities"];
@@ -18,6 +19,7 @@ export function buildAuditReport(args: {
     generatedAt: args.generatedAt,
     input: args.input,
     lotl: args.lotl,
+    lotlAssessment: args.lotlAssessment,
     weBuildProfile: args.weBuildProfile,
     fixtureReadiness: args.fixtureReadiness,
     fcafTrustedAuthorities: args.fcafTrustedAuthorities,

@@ -326,6 +326,44 @@ describe("assessJsonLote", () => {
     }));
   });
 
+  it("validates retained JSON historical ServiceName content with element paths", async () => {
+    const parsed = await fixture("json-lote.json") as { LoTE: Record<string, unknown> };
+    const information = (parsed.LoTE.ListAndSchemeInformation as Record<string, unknown>);
+    information.HistoricalInformationPeriod = 30;
+    const service = ((parsed.LoTE.TrustedEntitiesList as Array<Record<string, unknown>>)[0].TrustedEntityServices as Array<Record<string, unknown>>)[0];
+    const current = service.ServiceInformation as Record<string, unknown>;
+    current.ServiceStatus = "https://example.test/status/current";
+    current.StatusStartingTime = "2026-07-02T00:00:00Z";
+    service.ServiceHistory = [{
+      ServiceName: [{ lang: "en", value: "Historical Service" }],
+      ServiceDigitalIdentity: { DigitalId: [{ OtherId: "urn:example:history" }] },
+      ServiceStatus: "https://example.test/status/previous",
+      StatusStartingTime: "2026-07-01T12:00:00Z",
+    }];
+
+    const valid = assessJsonLote(structuredClone(parsed), true, new Date("2026-07-21T00:00:00Z"));
+    expect(valid.ts119602.checks).toContainEqual(expect.objectContaining({ id: "ts119602.service.history", status: "pass" }));
+
+    for (const [value, diagnostic] of [["   ", "service_name.blank"], ["\tHistorical Service", "multilingual.control_character"], ["Historical Service\n", "multilingual.control_character"], ["\rHistorical Service", "multilingual.control_character"]] as const) {
+      const candidate = structuredClone(parsed);
+      const candidateService = ((candidate.LoTE.TrustedEntitiesList as Array<Record<string, unknown>>)[0].TrustedEntityServices as Array<Record<string, unknown>>)[0];
+      (candidateService.ServiceHistory as Array<Record<string, unknown>>)[0].ServiceName = [{ lang: "en", value }];
+      const result = assessJsonLote(candidate, true, new Date("2026-07-21T00:00:00Z"));
+      expect(result.ts119602.checks).toContainEqual(expect.objectContaining({
+        id: "ts119602.service.history",
+        status: "fail",
+        evidence: expect.objectContaining({
+          results: [expect.objectContaining({
+            instances: [expect.objectContaining({
+              name: expect.objectContaining({ diagnostics: expect.arrayContaining([expect.objectContaining({ code: diagnostic })]) }),
+              blankNamePaths: diagnostic === "service_name.blank" ? ["/LoTE/TrustedEntitiesList/0/TrustedEntityServices/0/ServiceHistory/0/ServiceName/0"] : [],
+            })],
+          })],
+        }),
+      }));
+    }
+  });
+
   it("rejects whitespace-only JSON service names with their element path", async () => {
     const parsed = await fixture("json-lote.json") as { LoTE: { TrustedEntitiesList: Array<Record<string, unknown>> } };
     const service = (parsed.LoTE.TrustedEntitiesList[0].TrustedEntityServices as Array<Record<string, unknown>>)[0];

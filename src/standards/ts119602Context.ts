@@ -2,7 +2,7 @@ import { X509Certificate } from "node:crypto";
 import { normalizeBase64Certificate, sha256Hex } from "../certs.js";
 import { detectArtifact } from "../detect.js";
 import { fetchArtifact, type FetchResult } from "../fetcher.js";
-import { asArray, firstString, getPath, parseLotlJson, stringValue } from "../lotl.js";
+import { asArray, firstString, getPath, stringValue } from "../lotl.js";
 import type {
   ArtifactKind,
   CheckResult,
@@ -192,13 +192,16 @@ function extractReferences(bytes: Buffer, contentType: string | undefined, optio
 
 function extractJsonReferences(parsed: unknown, options: Ts119602ContextOptions): ContextReference[] {
   const info = getPath(parsed, ["LoTE", "ListAndSchemeInformation"]);
-  const lotl = parseLotlJson(JSON.stringify(parsed));
-  const pointers = lotl.pointers.map((pointer) => ({
-    kind: "pointer" as const,
-    location: pointer.location,
-    ...inspectTs119602JsonPointerIdentity(pointer.raw),
-    pointerIdentityCount: asArray(getPath(pointer.raw, ["ServiceDigitalIdentities"])).length,
-  }));
+  const pointers = asArray(getPath(info, ["PointersToOtherLoTE"])).flatMap((pointer) => {
+    const location = stringValue(getPath(pointer, ["LoTELocation"]));
+    if (!location) return [];
+    return [{
+      kind: "pointer" as const,
+      location,
+      ...inspectTs119602JsonPointerIdentity(pointer),
+      pointerIdentityCount: asArray(getPath(pointer, ["ServiceDigitalIdentities"])).length,
+    }];
+  });
   const distribution = stringValues(getPath(info, ["DistributionPoints"])).map((location) => ({ kind: "distribution" as const, location }));
   const informationUris = stringValues(getPath(info, ["SchemeInformationURI"]));
   const profileHasArchive = new Set([

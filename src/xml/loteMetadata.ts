@@ -586,10 +586,11 @@ function xmlAddress(node: Node | undefined): Ts119602EntitiesInput["entities"][n
   };
 }
 
-function xmlMultilingual(context: Node, expression: string): Array<{ language: unknown; value: unknown; path: string; hasElementContent: boolean }> {
+function xmlMultilingual(context: Node, expression: string): Array<{ language: unknown; value: unknown; rawText: unknown; path: string; hasElementContent: boolean }> {
   return nodes(context, expression).map((entry) => ({
     language: (entry as Element).getAttributeNS("http://www.w3.org/XML/1998/namespace", "lang") || undefined,
     value: nodeText(entry),
+    rawText: entry.textContent,
     path: xmlNodePath(entry),
     hasElementContent: Array.from(entry.childNodes).some((child) => child.nodeType === 1),
   }));

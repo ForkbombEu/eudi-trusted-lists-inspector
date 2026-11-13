@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <TrustServiceStatusList
   xmlns="http://uri.etsi.org/02231/v2#"
-  TSLTag="http://uri.etsi.org/TrstSvc/TrustedList/TSLTag"
+  TSLTag="http://uri.etsi.org/19612/TSLTag"
   Id="TSP-SERVICE-VALID">
   <SchemeInformation>
     <TSLVersionIdentifier>6</TSLVersionIdentifier>

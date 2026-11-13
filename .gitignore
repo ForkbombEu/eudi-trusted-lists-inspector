@@ -8,3 +8,8 @@ tl-audit-output/
 artifacts/*
 !artifacts/handoffs/
 !artifacts/handoffs/*.md
+# trail (local repo context graph tooling; not shared)
+.trail/
+trail/
+.claude/
+opencode.json

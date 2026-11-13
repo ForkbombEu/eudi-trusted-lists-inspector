@@ -3,6 +3,11 @@
   "standard": "ETSI TS 119 612 V2.4.1",
   "requirements": [
     {
+      "requirementId": "ts119612.structure.tsl_tag",
+      "positive": { "testFile": "test/ts119612Checks.test.ts", "fixtures": ["test/fixtures/ts119612-scheme-information-valid.xml", "test/fixtures/lotl-ts119612.xml"], "findingId": "ts119612.structure.tsl_tag", "status": "pass" },
+      "negative": { "testFile": "test/ts119612Checks.test.ts", "fixtures": ["test/fixtures/ts119612-scheme-information-valid.xml", "test/fixtures/lotl-ts119612.xml"], "findingId": "ts119612.structure.tsl_tag", "status": "fail" }
+    },
+    {
       "requirementId": "ts119612.scheme.version",
       "positive": { "testFile": "test/ts119612SchemeInformation.test.ts", "fixtures": ["test/fixtures/ts119612-scheme-information-valid.xml"], "findingId": "ts119612.scheme.version", "status": "pass" },
       "negative": { "testFile": "test/ts119612SchemeInformation.test.ts", "fixtures": ["test/fixtures/ts119612-scheme-information-valid.xml"], "findingId": "ts119612.scheme.version", "status": "fail" }

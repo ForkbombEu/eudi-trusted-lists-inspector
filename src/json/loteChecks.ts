@@ -231,7 +231,7 @@ function jsonService(value: unknown, path: string): Ts119602ServiceObservation {
       const historyPath = `${path}/ServiceHistory/${index}`;
       return {
         path: historyPath,
-        name: jsonMultilingual(history.ServiceName),
+        name: jsonMultilingual(history.ServiceName, `${historyPath}/ServiceName`),
         identity: jsonIdentity(history.ServiceDigitalIdentity, `${historyPath}/ServiceDigitalIdentity`),
         status: { present: Object.hasOwn(history, "ServiceStatus"), value: history.ServiceStatus },
         statusStartingTime: { present: Object.hasOwn(history, "StatusStartingTime"), value: history.StatusStartingTime },

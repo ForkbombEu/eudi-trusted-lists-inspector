@@ -29,6 +29,51 @@ describe("parseLotlJson", () => {
       mimeType: "application/json",
     });
   });
+
+  it.each(["{}", "null", "[]"])("rejects unrelated JSON %s", (text) => {
+    expect(() => parseLotlJson(text)).toThrow("JSON LoTL");
+  });
+
+  it("rejects an ordinary LoTE supplied as a LoTL", async () => {
+    const text = await readFile("test/fixtures/json-lote.json", "utf8");
+    expect(() => parseLotlJson(text)).toThrow("list-of-trusted-lists type");
+  });
+
+  it("rejects a LoTE type that merely mentions LoTL outside its final segment", async () => {
+    const raw = JSON.parse(await readFile("test/fixtures/lotl.json", "utf8")) as {
+      LoTE: { ListAndSchemeInformation: { LoTEType: string } };
+    };
+    raw.LoTE.ListAndSchemeInformation.LoTEType = "http://uri.etsi.org/19602/LoTLType/EUPIDProvidersList";
+    expect(() => parseLotlJson(JSON.stringify(raw))).toThrow("list-of-trusted-lists type");
+    raw.LoTE.ListAndSchemeInformation.LoTEType = "http://uri.etsi.org/19602/LoTLType/EUListOfTrustedLists";
+    expect(parseLotlJson(JSON.stringify(raw)).summary.pointerCount).toBe(3);
+  });
+
+  it("rejects an unusable pointer with its original index", async () => {
+    const raw = JSON.parse(await readFile("test/fixtures/lotl.json", "utf8")) as {
+      LoTE: { ListAndSchemeInformation: { PointersToOtherLoTE: unknown[] } };
+    };
+    raw.LoTE.ListAndSchemeInformation.PointersToOtherLoTE.unshift({ LoTEType: "invalid" });
+
+    expect(() => parseLotlJson(JSON.stringify(raw))).toThrow("pointer 1");
+  });
+
+  it("recovers an enveloping compact JWS LoTL payload", async () => {
+    const payload = await readFile("test/fixtures/lotl.json", "utf8");
+    const header = Buffer.from(JSON.stringify({ alg: "RS256" })).toString("base64url");
+    const compact = `${header}.${Buffer.from(payload).toString("base64url")}.AA`;
+
+    const parsed = parseLotl(compact);
+
+    expect(parsed.format).toBe("json");
+    expect(parsed.summary.pointerCount).toBe(3);
+    expect(parsed.pointers[0]?.location).toBe("https://example.test/tl.xml");
+  });
+
+  it("rejects detached compact JWS input explicitly", () => {
+    const header = Buffer.from(JSON.stringify({ alg: "RS256" })).toString("base64url");
+    expect(() => parseLotl(`${header}..AA`)).toThrow("Detached compact JAdES");
+  });
 });
 
 describe("parseLotl XML", () => {

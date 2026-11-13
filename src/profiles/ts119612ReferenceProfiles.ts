@@ -16,6 +16,7 @@ const EU_GENERIC_TYPE = "http://uri.etsi.org/TrstSvc/TrustedList/TSLType/EUgener
 const EU_LOTL_TYPE = "http://uri.etsi.org/TrstSvc/TrustedList/TSLType/EUlistofthelists";
 
 const ROLE_BY_SERVICE_TYPE = new Map<string, EudiTrustRole>([
+  ["http://uri.etsi.org/TrstSvc/Svctype/EAA", "eaa_provider"],
   ["http://uri.etsi.org/TrstSvc/Svctype/EAA/Q", "qeaa_provider"],
   ["http://uri.etsi.org/TrstSvc/Svctype/EAA/Pub-EAA", "pub_eaa_provider"],
   ["http://uri.etsi.org/Svc/Svctype/Provider/Wallet", "wallet_provider"],
@@ -24,6 +25,13 @@ const ROLE_BY_SERVICE_TYPE = new Map<string, EudiTrustRole>([
   ["http://uri.etsi.org/Svc/Svctype/CA/Registration", "registration_ca_or_wrprc_provider"],
   ["http://uri.etsi.org/Svc/Svctype/Provider/Registrar", "registrar_or_register"],
 ]);
+
+export function observedRolesForServiceTypes(serviceTypes: readonly string[]): EudiTrustRole[] {
+  return [...new Set(serviceTypes.flatMap((serviceType) => {
+    const role = ROLE_BY_SERVICE_TYPE.get(serviceType);
+    return role ? [role] : [];
+  }))];
+}
 
 interface ReferenceProfileInput {
   xml: string;

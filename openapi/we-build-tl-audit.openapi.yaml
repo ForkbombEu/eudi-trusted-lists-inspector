@@ -63,7 +63,7 @@ paths:
               schema: { type: string }
   /api/v1/audit/url:
     post:
-      summary: Audit a JSON or ETSI TS 119 612 XML LoTL loaded from URL
+      summary: Audit a JSON, enveloping compact JWS, or ETSI TS 119 612 XML LoTL loaded from URL
       requestBody:
         required: true
         content:
@@ -134,9 +134,13 @@ paths:
                       ListAndSchemeInformation:
                         SchemeOperatorName: Example Operator
                         SchemeName: Example LoTL
-                        LoTEType: example
+                        LoTEType: http://uri.etsi.org/19602/LoTLType/EUListOfTrustedLists
                         LoTESequenceNumber: 1
-                        PointersToOtherLoTE: []
+                        PointersToOtherLoTE:
+                          - LoTELocation: https://example.test/tl.xml
+                            LoTEQualifiers:
+                              - LoTEType: http://uri.etsi.org/TrstSvc/TrustedList/TSLType/EUgeneric
+                                MimeType: application/xml
                   options:
                     concurrency: 4
                     timeoutMs: 15000
@@ -154,7 +158,7 @@ paths:
         '500': { $ref: '#/components/responses/InternalError' }
   /api/v1/lotl/parse:
     post:
-      summary: Parse and summarize a JSON or ETSI TS 119 612 XML LoTL without fetching pointers
+      summary: Parse and summarize a JSON, enveloping compact JWS, or ETSI TS 119 612 XML LoTL without fetching pointers
       requestBody:
         required: true
         content:
@@ -176,9 +180,11 @@ paths:
                     LoTE:
                       ListAndSchemeInformation:
                         SchemeOperatorName: Example Operator
+                        LoTEType: http://uri.etsi.org/19602/LoTLType/EUListOfTrustedLists
                         PointersToOtherLoTE:
                           - LoTELocation: https://example.test/tl.xml
-                            MimeType: application/xml
+                            LoTEQualifiers:
+                              - MimeType: application/xml
       responses:
         '200':
           description: Parsed LoTL summary and pointers.
@@ -326,7 +332,7 @@ paths:
         '500': { $ref: '#/components/responses/InternalError' }
   /api/audit/lotl:
     post:
-      summary: Audit a JSON or ETSI TS 119 612 XML LoTL from a URL, JSON object, or raw content
+      summary: Audit a JSON, enveloping compact JWS, or ETSI TS 119 612 XML LoTL from a URL, JSON object, or raw content
       requestBody:
         required: true
         content:
@@ -480,7 +486,7 @@ components:
             - type: object
               additionalProperties: true
             - type: string
-        content: { type: string, description: Raw JSON or ETSI TS 119 612 XML LoTL content. }
+        content: { type: string, description: Raw JSON, enveloping compact JWS, or ETSI TS 119 612 XML LoTL content. Detached compact input is rejected without external payload bytes. }
         options: { $ref: '#/components/schemas/AuditOptions' }
         context: { $ref: '#/components/schemas/Ts119602ContextOptions' }
         rpacChain:
@@ -702,7 +708,7 @@ components:
           items: { type: string }
         declaredRole:
           type: string
-          enum: [wallet_provider, pid_provider, qeaa_provider, pub_eaa_provider, access_ca_or_wrpac_provider, registration_ca_or_wrprc_provider, registrar_or_register]
+          enum: [wallet_provider, pid_provider, eaa_provider, qeaa_provider, pub_eaa_provider, access_ca_or_wrpac_provider, registration_ca_or_wrprc_provider, registrar_or_register]
     ArtifactAssessOptions:
       type: object
       additionalProperties: false
@@ -752,6 +758,8 @@ components:
             sha256: { type: string }
         lotl:
           $ref: '#/components/schemas/LoTLSummary'
+        lotlAssessment:
+          $ref: '#/components/schemas/TrustedListAuditResult'
         weBuildProfile:
           $ref: '#/components/schemas/WeBuildProfileSummary'
         fixtureReadiness:
@@ -827,6 +835,11 @@ components:
           type: object
           additionalProperties: { type: integer, minimum: 0 }
         roleCounts:
+          description: Declared pointer-role counts; generic pointers do not declare EAA/QEAA qualification.
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+        observedRoleCounts:
+          description: Per-pointer counts of deduplicated roles observed from exact current-service type identifiers.
           type: object
           additionalProperties: { type: integer, minimum: 0 }
         pointerConsistency:
@@ -1003,6 +1016,9 @@ components:
               items: { type: string }
             trustServiceProviderCount: { type: integer, minimum: 0 }
             serviceCount: { type: integer, minimum: 0 }
+            currentServiceTypeIdentifiers:
+              type: array
+              items: { type: string }
             certificates:
               type: array
               items:
@@ -1273,7 +1289,7 @@ components:
           uniqueItems: true
           items:
             type: string
-            enum: [wallet_provider, pid_provider, qeaa_provider, pub_eaa_provider, access_ca_or_wrpac_provider, registration_ca_or_wrprc_provider, registrar_or_register]
+            enum: [wallet_provider, pid_provider, eaa_provider, qeaa_provider, pub_eaa_provider, access_ca_or_wrpac_provider, registration_ca_or_wrprc_provider, registrar_or_register]
         checks:
           type: array
           items:

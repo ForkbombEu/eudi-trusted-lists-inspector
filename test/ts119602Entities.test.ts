@@ -90,6 +90,58 @@ describe("ETSI TS 119 602 clauses 6.4-6.7", () => {
     expect(find(buildTs119602EntityFindings(input), "ts119602.service.history")).toMatchObject({ status: "fail" });
   });
 
+  it("applies current ServiceName character, blank, and nested rules to retained history", () => {
+    const input = validInput();
+    input.historyPeriod = 30;
+    const service = input.entities[0].services[0];
+    service.status = { present: true, value: "https://example.test/status/current" };
+    service.statusStartingTime = { present: true, value: "2026-07-02T00:00:00Z" };
+    service.historyPresent = true;
+    service.history = [history("2026-07-01T12:00:00Z")];
+
+    service.history[0].name = [{ language: "en", value: "   ", path: "/history/1/name/1" }];
+    let result = find(buildTs119602EntityFindings(input), "ts119602.service.history");
+    expect(result).toMatchObject({
+      status: "fail",
+      evidence: expect.objectContaining({
+        results: [expect.objectContaining({
+          instances: [expect.objectContaining({
+            name: expect.objectContaining({ diagnostics: expect.arrayContaining([expect.objectContaining({ code: "service_name.blank" })]) }),
+            blankNamePaths: ["/history/1/name/1"],
+          })],
+        })],
+      }),
+    });
+
+    service.history[0].name = [{ language: "en", value: "Nested text", hasElementContent: true, path: "/history/1/name/1" }];
+    result = find(buildTs119602EntityFindings(input), "ts119602.service.history");
+    expect(result).toMatchObject({
+      status: "fail",
+      evidence: expect.objectContaining({
+        results: [expect.objectContaining({
+          instances: [expect.objectContaining({
+            name: expect.objectContaining({ diagnostics: expect.arrayContaining([expect.objectContaining({ code: "service_name.nested_element" })]) }),
+            nestedNamePaths: ["/history/1/name/1"],
+          })],
+        })],
+      }),
+    });
+
+    service.history[0].name = [{ language: "en", value: "Example Service", rawText: "\tExample Service", path: "/history/1/name/1" }];
+    result = find(buildTs119602EntityFindings(input), "ts119602.service.history");
+    expect(result).toMatchObject({
+      status: "fail",
+      evidence: expect.objectContaining({
+        results: [expect.objectContaining({
+          instances: [expect.objectContaining({
+            name: expect.objectContaining({ diagnostics: expect.arrayContaining([expect.objectContaining({ code: "multilingual.control_character" })]) }),
+          })],
+        })],
+      }),
+    });
+    expect(find(buildTs119602EntityFindings(input), "ts119602.service.name")).toMatchObject({ status: "pass" });
+  });
+
   it("fails closed for unknown critical entity and service extensions", () => {
     const input = validInput();
     const unknown = { path: "/extension", critical: true, identifier: "example", recognized: false, payloadValid: true };

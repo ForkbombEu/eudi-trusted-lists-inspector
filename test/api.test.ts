@@ -131,6 +131,11 @@ describe("API server", () => {
     const body = response.json();
     expect(body.report.summary.totalPointers).toBe(3);
     expect(body.report.summary.jsonArtifacts).toBe(1);
+    expect(body.report.lotlAssessment).toMatchObject({
+      detected: { format: "json", artifactKind: "json_lotl" },
+      fetch: { attempted: false },
+    });
+    expect(body.markdown).toContain("## LoTL assessment");
     expect(body.report.results[1].ts119612.conformanceLevel).toBe(
       "not_applicable",
     );
@@ -177,6 +182,8 @@ describe("API server", () => {
     expectIdunionFindings(jsonResponse.json().report.results[0]);
     const script = await app.inject({ method: "GET", url: "/assets/audit-ui.js" });
     const groups = await renderLotlFindingGroups(script.body, jsonResponse.json().report);
+    const rootGroup = groups.find((group) => group.includes("LoTL assessment"));
+    expect(rootGroup).toContain("ts119602.binding.json_schema");
     const childGroup = groups.find((group) => group.includes(`Fetched TrustedList: ${childUrl}`));
     expect(childGroup).toContain("ts119602.service.name");
     expect(childGroup).toContain("ts119602.entity.first_information_uri_sharing");
@@ -437,6 +444,7 @@ describe("API server", () => {
     expect(response.json().report).toMatchObject({
       input: { source: "request-body", kind: "xml" },
       summary: { totalPointers: 1, fetched: 0 },
+      lotlAssessment: { detected: { artifactKind: "ts119612_xml_lotl" } },
     });
     await app.close();
   });
@@ -455,6 +463,7 @@ describe("API server", () => {
       payload: {
         url: "https://example.test/eu-lotl.xml",
         options: { fetch: false },
+        context: { dereference: true },
       },
     });
 
@@ -462,6 +471,7 @@ describe("API server", () => {
     expect(response.json().report).toMatchObject({
       input: { source: "https://example.test/eu-lotl.xml", kind: "url" },
       summary: { totalPointers: 1, fetched: 0 },
+      lotlAssessment: { fetch: { attempted: false } },
     });
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     await app.close();
@@ -711,6 +721,27 @@ describe("API server", () => {
     expect(malformedJson.json()).toMatchObject({ error: { code: "invalid_lotl_json" } });
     expect(xmlOnJsonEndpoint.statusCode).toBe(400);
     expect(xmlOnJsonEndpoint.json()).toMatchObject({ error: { code: "invalid_lotl_json" } });
+
+    const ordinaryLote = await readFile("test/fixtures/json-lote.json", "utf8");
+    const header = Buffer.from(JSON.stringify({ alg: "RS256" })).toString("base64url");
+    const unusableRow = JSON.parse(await readFile("test/fixtures/we-build-lotl-profile.json", "utf8"));
+    unusableRow.LoTE.ListAndSchemeInformation.PointersToOtherLoTE.unshift({ LoTEQualifiers: [{ LoTEType: "http://uri.etsi.org/19602/LoTEType/EUWalletProvidersList" }] });
+    const unusableResponse = await app.inject({
+      method: "POST",
+      url: "/api/audit/lotl",
+      payload: { content: JSON.stringify(unusableRow), options: { fetch: false } },
+    });
+    expect(unusableResponse.statusCode).toBe(400);
+    expect(unusableResponse.json()).toMatchObject({ error: { code: "invalid_lotl_json", message: expect.stringContaining("pointer 1") } });
+    for (const lotl of ["{}", ordinaryLote, `${header}..AA`]) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/audit/lotl",
+        payload: { content: lotl, options: { fetch: false } },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: { code: "invalid_lotl_json" } });
+    }
     await app.close();
   });
 
@@ -783,6 +814,10 @@ describe("API server", () => {
     expect(
       parsedJson.components.schemas.AuditReport.properties.schemaVersion.const,
     ).toBe(7);
+    expect(
+      parsedJson.components.schemas.AuditReport.properties.lotlAssessment.$ref,
+    ).toBe("#/components/schemas/TrustedListAuditResult");
+    expect(parsedJson.components.schemas.AuditReport.required).not.toContain("lotlAssessment");
     expect(
       parsedJson.components.schemas.TrustedListAuditResult.required,
     ).toContain("referenceProfiles");
@@ -908,8 +943,8 @@ describe("API server", () => {
     expect(page.headers["content-type"]).toContain("text/html");
     expect(page.body).toContain('id="lotl-url"');
     expect(page.body).toContain("ETSI TS 119 612 XML LoTL");
-    expect(page.body).toContain("Upload LoTL XML or JSON file");
-    expect(page.body).toContain('accept="application/xml,text/xml,application/json,.xml,.json"');
+    expect(page.body).toContain("Upload LoTL XML, JSON, or JWS file");
+    expect(page.body).toContain('accept="application/xml,text/xml,application/json,application/jose,.xml,.json,.jws"');
     expect(page.body).toContain("Advanced options");
     expect(page.body).toContain("/assets/audit-ui.js");
     expect(page.body).toContain('rel="icon" href="/favicon.svg"');

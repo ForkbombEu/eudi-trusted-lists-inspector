@@ -274,7 +274,7 @@ export const certificateChainSchema: FastifySchema = {
       chain: { anyOf: [{ type: "string" }, { type: "array", items: { type: "string" }, minItems: 1 }] },
       format: { type: "string", enum: ["pem", "der_base64", "x5c"] },
       trustAnchors: { type: "array", items: { type: "string" } },
-      declaredRole: { type: "string", enum: ["wallet_provider", "pid_provider", "qeaa_provider", "pub_eaa_provider", "access_ca_or_wrpac_provider", "registration_ca_or_wrprc_provider", "registrar_or_register"] },
+      declaredRole: { type: "string", enum: ["wallet_provider", "pid_provider", "eaa_provider", "qeaa_provider", "pub_eaa_provider", "access_ca_or_wrpac_provider", "registration_ca_or_wrprc_provider", "registrar_or_register"] },
     },
   },
 };
