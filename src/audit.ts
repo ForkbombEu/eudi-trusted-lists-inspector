@@ -5,7 +5,7 @@ import { detectArtifact } from "./detect.js";
 import { fetchArtifact, saveFetchedArtifact } from "./fetcher.js";
 import { isUrl, loadInput } from "./input.js";
 import { assessJsonLote } from "./json/loteChecks.js";
-import { parseLotl, parseLotlJson } from "./lotl.js";
+import { emptyPointerEvidence, parseLotl, parseLotlJson } from "./lotl.js";
 import type { LotlFormat } from "./lotl.js";
 import { assessWeBuildProfile } from "./profiles/weBuild.js";
 import { assessTs119612ReferenceProfiles, emptyReferenceProfiles } from "./profiles/ts119612ReferenceProfiles.js";
@@ -248,6 +248,7 @@ export async function assessArtifactUrl(
       index: 1,
       location: options.url,
       declared: normalizeDeclared(options.declared),
+      evidence: emptyPointerEvidence(),
       raw: undefined,
     },
     {
@@ -267,7 +268,7 @@ export async function assessArtifactContent(options: AssessArtifactContentOption
   const bytes = Buffer.from(options.content, "utf8");
   const source = options.source ?? "request-body";
   const base: TrustedListAuditResult = {
-    id: resultId({ index: 1, location: source, declared: normalizeDeclared(options.declared), raw: undefined }),
+    id: resultId({ index: 1, location: source, declared: normalizeDeclared(options.declared), evidence: emptyPointerEvidence(), raw: undefined }),
     index: 1,
     source,
     location: source,

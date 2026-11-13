@@ -1,5 +1,4 @@
 import { tryCertificateFromBase64 } from "../certs.js";
-import { asArray, getPath, isRecord } from "../lotl.js";
 import type { ParsedLotl } from "../lotl.js";
 import type { CheckResult, FixtureReadiness, TrustedListAuditResult } from "../types.js";
 import { assessCertificateChain, type CertificateChainAssessment } from "./certificateChain.js";
@@ -87,21 +86,10 @@ function checkAssessmentCoverage(checks: CheckResult[], results: TrustedListAudi
 }
 
 function extractPointerCertificates(lotl: ParsedLotl, assessmentDate: Date): string[] {
-  const values: string[] = [];
-  for (const pointer of lotl.pointers) {
-    for (const identity of asArray(getPath(pointer.raw, ["ServiceDigitalIdentities"]))) visit(identity, values);
-  }
-  return values.filter((value) => Boolean(tryCertificateFromBase64(value, "pointer", assessmentDate)));
-}
-
-function visit(value: unknown, values: string[], certificateKey = false): void {
-  if (typeof value === "string") {
-    if (certificateKey && value.length > 100) values.push(value);
-    return;
-  }
-  if (Array.isArray(value)) { value.forEach((item) => visit(item, values, certificateKey)); return; }
-  if (!isRecord(value)) return;
-  for (const [key, nested] of Object.entries(value)) visit(nested, values, certificateKey || /certificate/i.test(key));
+  // Candidate anchors are parseable pointer certificate material from either binding; matching one is not signer trust.
+  return lotl.pointers
+    .flatMap((pointer) => pointer.evidence.certificateMaterial)
+    .filter((material) => Boolean(tryCertificateFromBase64(material, "pointer", assessmentDate)));
 }
 
 function check(id: string, status: CheckResult["status"], severity: CheckResult["severity"], message: string, evidence?: unknown): CheckResult {

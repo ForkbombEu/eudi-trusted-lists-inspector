@@ -28,11 +28,11 @@ describe("assessFixtureReadiness", () => {
       readFile("test/fixtures/we-build-lotl-profile.json", "utf8"),
       readFile("test/fixtures/tsl-signed-unsupported.xml", "utf8"),
     ]);
-    const lotl = parseLotlJson(lotlText);
     const certificate = signedXml.match(/<ds:X509Certificate>([^<]+)<\/ds:X509Certificate>/)?.[1];
     if (!certificate) throw new Error("Signed fixture must contain a certificate.");
-    const firstPointer = lotl.pointers[0].raw as { ServiceDigitalIdentities: Array<{ X509Certificates: string[] }> };
-    firstPointer.ServiceDigitalIdentities[0].X509Certificates = [certificate];
+    const raw = JSON.parse(lotlText) as { LoTE: { ListAndSchemeInformation: { PointersToOtherLoTE: Array<{ ServiceDigitalIdentities: Array<{ X509Certificates: string[] }> }> } } };
+    raw.LoTE.ListAndSchemeInformation.PointersToOtherLoTE[0].ServiceDigitalIdentities[0].X509Certificates = [certificate];
+    const lotl = parseLotlJson(JSON.stringify(raw));
     const readiness = assessFixtureReadiness({
       source: "fixture",
       lotl,

@@ -38,11 +38,11 @@ describe("WE BUILD profile", () => {
       readFile("test/fixtures/we-build-lotl-profile.json", "utf8"),
       readFile("test/fixtures/tsl-signed-unsupported.xml", "utf8"),
     ]);
-    const lotl = parseLotlJson(lotlText);
     const certificate = signedXml.match(/<ds:X509Certificate>([^<]+)<\/ds:X509Certificate>/)?.[1];
     if (!certificate) throw new Error("Signed fixture must contain a certificate.");
-    const firstPointer = lotl.pointers[0].raw as { ServiceDigitalIdentities: Array<{ X509Certificates: string[] }> };
-    firstPointer.ServiceDigitalIdentities[0].X509Certificates = [certificate];
+    const raw = JSON.parse(lotlText) as { LoTE: { ListAndSchemeInformation: { PointersToOtherLoTE: Array<{ ServiceDigitalIdentities: Array<{ X509Certificates: string[] }> }> } } };
+    raw.LoTE.ListAndSchemeInformation.PointersToOtherLoTE[0].ServiceDigitalIdentities[0].X509Certificates = [certificate];
+    const lotl = parseLotlJson(JSON.stringify(raw));
     const results = [result(1, "json"), result(2, "xml"), result(3, "json")];
     const summary = assessWeBuildProfile(lotl, results, new Date("2026-08-01T00:00:00Z"));
     expect(summary).toMatchObject({

@@ -1,5 +1,4 @@
 import { tryCertificateFromBase64 } from "../certs.js";
-import { asArray, getPath, isRecord } from "../lotl.js";
 import type { ParsedLotl } from "../lotl.js";
 import { observedRolesForServiceTypes } from "./ts119612ReferenceProfiles.js";
 import type { CheckResult, TrustedListAuditResult } from "../types.js";
@@ -84,13 +83,13 @@ function pointerChecks(pointer: ParsedLotl["pointers"][number], result: TrustedL
   const duplicate = duplicateLocations.includes(pointer.location);
   if (duplicate) summary.pointerConsistency.duplicateLocations += 1;
   checks.push(check("we_build.pointer.duplicate_location", duplicate ? "warn" : "pass", duplicate ? "warning" : "info", duplicate ? "Pointer location is duplicated in the LoTL." : "Pointer location is unique in the LoTL.", pointer.location));
-  const identities = asArray(getPath(pointer.raw, ["ServiceDigitalIdentities"]));
-  if (identities.length === 0) summary.pointerConsistency.pointersMissingServiceDigitalIdentities += 1;
-  checks.push(check("we_build.pointer.service_digital_identities", identities.length > 0 ? "pass" : "warn", identities.length > 0 ? "info" : "warning", identities.length > 0 ? "Pointer includes ServiceDigitalIdentities." : "Pointer is missing ServiceDigitalIdentities.", identities.length));
-  const qualifiers = asArray(getPath(pointer.raw, ["LoTEQualifiers"]));
-  if (qualifiers.length === 0) summary.pointerConsistency.pointersMissingQualifiers += 1;
-  checks.push(check("we_build.pointer.lote_qualifiers", qualifiers.length > 0 ? "pass" : "warn", qualifiers.length > 0 ? "info" : "warning", qualifiers.length > 0 ? "Pointer includes LoTEQualifiers." : "Pointer is missing LoTEQualifiers.", qualifiers.length));
-  const certificates = certificateValues(identities);
+  const identityCount = pointer.evidence.serviceDigitalIdentityCount;
+  if (identityCount === 0) summary.pointerConsistency.pointersMissingServiceDigitalIdentities += 1;
+  checks.push(check("we_build.pointer.service_digital_identities", identityCount > 0 ? "pass" : "warn", identityCount > 0 ? "info" : "warning", identityCount > 0 ? "Pointer includes ServiceDigitalIdentities." : "Pointer is missing ServiceDigitalIdentities.", identityCount));
+  const qualifierSetCount = pointer.evidence.qualifierSetCount;
+  if (qualifierSetCount === 0) summary.pointerConsistency.pointersMissingQualifiers += 1;
+  checks.push(check("we_build.pointer.lote_qualifiers", qualifierSetCount > 0 ? "pass" : "warn", qualifierSetCount > 0 ? "info" : "warning", qualifierSetCount > 0 ? "Pointer includes LoTEQualifiers (XML: AdditionalInformation qualifiers)." : "Pointer is missing LoTEQualifiers (XML: AdditionalInformation qualifiers).", qualifierSetCount));
+  const certificates = pointer.evidence.certificateMaterial;
   if (certificates.length === 0) {
     checks.push(check("we_build.pointer.certificate_evidence", "not_checked", "info", "Pointer certificate parsing was not checked because no embedded certificate material is present."));
   } else {
@@ -128,6 +127,5 @@ function observedRolesCheck(result: TrustedListAuditResult, summary: WeBuildProf
 }
 
 function declaredFormat(mimeType: string | undefined): "xml" | "json" | undefined { if (!mimeType) return undefined; if (/xml/i.test(mimeType)) return "xml"; if (/json/i.test(mimeType)) return "json"; return undefined; }
-function certificateValues(identities: unknown[]): string[] { const values: string[] = []; const visit = (value: unknown, certificateKey = false): void => { if (typeof value === "string") { if (certificateKey && value.length > 100) values.push(value); return; } if (Array.isArray(value)) { value.forEach((item) => visit(item, certificateKey)); return; } if (!isRecord(value)) return; for (const [key, nested] of Object.entries(value)) visit(nested, certificateKey || /certificate/i.test(key)); }; identities.forEach((identity) => visit(identity)); return values; }
 function increment(counts: Record<string, number>, key: string): void { counts[key] = (counts[key] ?? 0) + 1; }
 function check(id: string, status: CheckResult["status"], severity: CheckResult["severity"], message: string, evidence?: unknown): CheckResult { return { id, category: "profile", status, severity, message, evidence }; }

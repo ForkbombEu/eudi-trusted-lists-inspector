@@ -1,6 +1,6 @@
 import { certificateFingerprintSha256 } from "./certs.js";
 import { parseCompactJades } from "./json/jades.js";
-import type { PointerInfo } from "./types.js";
+import type { PointerEvidence, PointerInfo } from "./types.js";
 import { parseXml } from "./xml/parse.js";
 
 const TSL_NS = "http://uri.etsi.org/02231/v2#";
@@ -41,6 +41,11 @@ type LotlSummaryFields = Omit<
   ParsedLotl["summary"],
   "pointerCount" | "uniqueLocationCount" | "duplicateLocations"
 >;
+
+/** Evidence for a pointer synthesized outside a LoTL (single-artifact assessment): no LoTL row exists. */
+export function emptyPointerEvidence(): PointerEvidence {
+  return { serviceDigitalIdentityCount: 0, qualifierSetCount: 0, certificateMaterial: [] };
+}
 
 export function parseLotl(text: string): ParsedLotl {
   const trimmed = text.trimStart();
@@ -92,6 +97,8 @@ export function parseLotlJson(text: string): ParsedLotl {
     if (!location) {
       throw new LotlParseError(`JSON LoTL pointer ${zeroIndex + 1} must contain one non-empty LoTELocation.`, "json");
     }
+    const identities = asArray(getPath(pointer, ["ServiceDigitalIdentities"]));
+    const certificateMaterial = jsonCertificateMaterial(identities);
     return {
       index: zeroIndex + 1,
       location,
@@ -100,7 +107,12 @@ export function parseLotlJson(text: string): ParsedLotl {
         loteType: qualifierValue(pointer, "LoTEType"),
         schemeOperatorName: firstString(getPath(pointer, ["SchemeOperatorName"])),
         schemeTerritory: firstString(getPath(pointer, ["SchemeTerritory"])),
-        pointerCertificateFingerprintsSha256: extractPointerFingerprints(pointer),
+        pointerCertificateFingerprintsSha256: certificateFingerprints(certificateMaterial),
+      },
+      evidence: {
+        serviceDigitalIdentityCount: identities.length,
+        qualifierSetCount: asArray(getPath(pointer, ["LoTEQualifiers"])).length,
+        certificateMaterial,
       },
       raw: pointer,
     };
@@ -195,13 +207,12 @@ function parseLotlXml(text: string): ParsedLotl {
     const qualifier = (name: string, namespace = TSL_NS): Element | undefined =>
       qualifierContainers.flatMap((container) => descendants(container, name, namespace))[0];
     const identities = directChildren(pointer, "ServiceDigitalIdentities");
-    const fingerprints = new Set<string>();
-    for (const certificate of identities.flatMap((identity) =>
-      descendants(identity, "X509Certificate", TSL_NS))) {
-      const encoded = elementText(certificate);
-      const fingerprint = encoded && certificateFingerprintSha256(encoded);
-      if (fingerprint) fingerprints.add(fingerprint);
-    }
+    const certificateMaterial = identities
+      .flatMap((identity) => descendants(identity, "X509Certificate", TSL_NS))
+      .flatMap((certificate) => {
+        const encoded = elementText(certificate);
+        return encoded ? [encoded] : [];
+      });
 
     const operator = qualifier("SchemeOperatorName");
     return {
@@ -214,7 +225,17 @@ function parseLotlXml(text: string): ParsedLotl {
           operator && descendants(operator, "Name", TSL_NS)[0],
         ),
         schemeTerritory: elementText(qualifier("SchemeTerritory")),
-        pointerCertificateFingerprintsSha256: [...fingerprints].sort(),
+        pointerCertificateFingerprintsSha256: certificateFingerprints(certificateMaterial),
+      },
+      evidence: {
+        serviceDigitalIdentityCount: identities.reduce(
+          (count, container) => count + directChildren(container, "ServiceDigitalIdentity").length,
+          0,
+        ),
+        qualifierSetCount: additionalInformation.filter(
+          (information) => directChildren(information, "OtherInformation").length > 0,
+        ).length,
+        certificateMaterial,
       },
       raw: pointer,
     };
@@ -379,13 +400,11 @@ function qualifierValue(pointer: unknown, name: "LoTEType" | "MimeType"): string
   return undefined;
 }
 
-function extractPointerFingerprints(pointer: unknown): string[] {
-  const identities = asArray(getPath(pointer, ["ServiceDigitalIdentities"]));
-  const fingerprints = new Set<string>();
-  const visit = (value: unknown, certificateContext = false): void => {
-    if (typeof value === "string" && certificateContext && value.length > 200) {
-      const fingerprint = certificateFingerprintSha256(value);
-      if (fingerprint) fingerprints.add(fingerprint);
+function jsonCertificateMaterial(identities: unknown[]): string[] {
+  const material: string[] = [];
+  const visit = (value: unknown, certificateContext: boolean): void => {
+    if (typeof value === "string") {
+      if (certificateContext && value.trim()) material.push(value.trim());
       return;
     }
     if (Array.isArray(value)) {
@@ -393,11 +412,25 @@ function extractPointerFingerprints(pointer: unknown): string[] {
       return;
     }
     if (!isRecord(value)) return;
+    // A TS 119 602 PKIObject carries the certificate in `val`; `encoding` and `specRef` are URIs, not material.
+    if (certificateContext && Object.hasOwn(value, "val")) {
+      visit(value.val, true);
+      return;
+    }
     for (const [key, nested] of Object.entries(value)) {
-      const nestedCertificateContext = certificateContext || /X509Certificate|certificate/i.test(key);
-      if (nestedCertificateContext || typeof nested === "object") visit(nested, nestedCertificateContext);
+      if (certificateContext && (key === "encoding" || key === "specRef")) continue;
+      visit(nested, certificateContext || /X509Certificate|certificate/i.test(key));
     }
   };
-  identities.forEach((identity) => visit(identity));
+  identities.forEach((identity) => visit(identity, false));
+  return material;
+}
+
+function certificateFingerprints(material: readonly string[]): string[] {
+  const fingerprints = new Set<string>();
+  for (const encoded of material) {
+    const fingerprint = certificateFingerprintSha256(encoded);
+    if (fingerprint) fingerprints.add(fingerprint);
+  }
   return [...fingerprints].sort();
 }

@@ -366,10 +366,27 @@ export interface TrustedListAuditResult {
   };
 }
 
+/**
+ * Binding-neutral pointer metadata extracted once by the JSON or XML LoTL parser.
+ * Certificate material is the published base64 text, unparsed and untrusted:
+ * parsing it yields pointer certificates, parseable ones are only candidate
+ * anchors, and neither establishes signer trust.
+ */
+export interface PointerEvidence {
+  /** JSON `ServiceDigitalIdentities` entries or XML `ServiceDigitalIdentity` elements. */
+  serviceDigitalIdentityCount: number;
+  /** JSON `LoTEQualifiers` entries or XML `AdditionalInformation` sets with `OtherInformation`. */
+  qualifierSetCount: number;
+  /** Non-empty certificate values from the pointer identities, in document order. */
+  certificateMaterial: string[];
+}
+
 export interface PointerInfo {
   index: number;
   location: string;
   declared: TrustedListAuditResult["declared"];
+  evidence: PointerEvidence;
+  /** Binding-specific source node (JSON object or XML Element); do not read cross-binding properties from it. */
   raw: unknown;
 }
 
